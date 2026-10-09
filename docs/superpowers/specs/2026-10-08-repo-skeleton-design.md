@@ -1,7 +1,7 @@
 # chatctl: repository skeleton and discovery kit
 
 Date: 2026-10-08
-Status: draft, awaiting review
+Status: approved
 
 ## Context
 
@@ -33,17 +33,20 @@ initial plan.
 
 ### Environment
 
-- A project-local virtualenv at `.venv/`, created with the Python 3.12
-  interpreter: `~/.venv/3.12/bin/python -m venv .venv`.
-- `.venv/` is gitignored.
-- The package is installed editable with dev extras:
-  `.venv/bin/pip install -e '.[dev]'`.
+- Managed with `uv`. No direct use of `pip` or `python -m venv`.
+- `.python-version` pins `3.12`.
+- `uv sync` creates the project-local virtualenv at `.venv/` and
+  installs the package (editable) plus the `dev` dependency group.
+- `uv.lock` is committed. `.venv/` is gitignored.
+- Commands run through uv: `uv run pytest`, `uv run ruff check .`,
+  `uv run chatctl ...`.
 
 ### Packaging
 
 - `pyproject.toml`, build backend `hatchling`, `requires-python = ">=3.12"`.
 - No runtime dependencies.
-- `dev` optional-dependency group: `pytest`, `ruff`.
+- Dev tools in a PEP 735 `[dependency-groups]` `dev` group (added with
+  `uv add --dev`): `pytest`, `ruff`.
 - Console script: `chatctl = "chatctl.cli:main"`.
 - Ruff configured in `pyproject.toml` with defaults plus import sorting.
 
@@ -221,9 +224,9 @@ and how the findings were gathered.
   the top that the tool has been renamed to `chatctl`.
 - `README.md`: what chatctl is, current status (skeleton plus
   discovery, no archiving yet), the safety principle quoted from the
-  plan, setup and test commands, a pointer to `discovery/`, and a
+  plan, setup and test commands (uv), a pointer to `discovery/`, and a
   one-line credit that the project was built with Claude.
-- `AGENTS.md`: local `.venv` setup, how to run tests and lint, the rule
+- `AGENTS.md`: uv setup (`uv sync`, `uv run ...`), how to run tests and lint, the rule
   that nothing mutates account state without an explicit `--apply`,
   the rule that the discovery probe stays GET-only, and the privacy
   rules (no titles, IDs or tokens in committed files).
@@ -234,8 +237,8 @@ and how the findings were gathered.
 
 ## Done when
 
-- `.venv/bin/pytest` passes.
-- `.venv/bin/ruff check .` and `.venv/bin/ruff format --check .` pass.
-- `.venv/bin/chatctl --version` and `.venv/bin/chatctl archive --older-than 90d`
+- `uv run pytest` passes.
+- `uv run ruff check .` and `uv run ruff format --check .` pass.
+- `uv run chatctl --version` and `uv run chatctl archive --older-than 90d`
   behave as described above.
 - `node --check discovery/probe.js` passes.
