@@ -1,0 +1,15 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# Account data. Never commit these.
+chatctl-probe-*.json
+*.har
+archive-run-*.json
+archive-run-*.failures.json
