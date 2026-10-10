@@ -4,10 +4,11 @@ import argparse
 import re
 import sys
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 from chatctl import __version__
-from chatctl.selection import parse_date, parse_duration
+from chatctl.selection import cutoff_from, parse_date, parse_duration
 
 
 def _checked[T](parse: Callable[[str], T]) -> Callable[[str], T]:
@@ -93,6 +94,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.command == "archive":
+        try:
+            cutoff_from(
+                older_than=args.older_than, before=args.before, now=datetime.now(UTC)
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
     print(f"chatctl {args.command}: not implemented yet", file=sys.stderr)
     return 1

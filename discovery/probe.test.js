@@ -294,3 +294,53 @@ test("reportFilename uses a filesystem-safe UTC timestamp", () => {
     "chatctl-probe-2026-10-08T172000Z.json",
   );
 });
+
+test("redactItem keeps prefixes only for ID-named project fields", () => {
+  const redacted = probe.redactItem({
+    project_name: "Taxes",
+    gizmo_title: "Home server",
+    gizmo_type: "snorlax",
+    gizmo_id: "g-p-abcdef123456",
+    workspaceId: "ws-1234567890",
+  });
+  assert.deepEqual(redacted, {
+    project_name: "<string:5>",
+    gizmo_title: "<string:11>",
+    gizmo_type: "<string:7>",
+    gizmo_id: "g-p-abcd",
+    workspaceId: "ws-12345",
+  });
+  const summary = probe.summariseItems([{ project_name: "Taxes" }]);
+  assert.deepEqual(summary.fields.project_name.values, { "<string:5>": 1 });
+});
+
+test("describe hides the keys of map-like objects", () => {
+  const uuid = "11111111-2222-3333-4444-555555555555";
+  assert.equal(probe.describe({ [uuid]: {} }), "<object:1 keys>");
+  const wide = Object.fromEntries(Array.from({ length: 31 }, (_, i) => [`k${i}`, i]));
+  assert.equal(probe.describe(wide), "<object:31 keys>");
+  assert.equal(probe.describe({ a: 1, b: "x" }), "<object:a,b>");
+});
+
+test("walkList keeps collected items when a request throws", async () => {
+  const all = conversations(5);
+  let calls = 0;
+  const get = async () => {
+    calls += 1;
+    if (calls === 1) return { status: 200, body: { items: all.slice(0, 3) } };
+    throw new TypeError("Failed to fetch https://chatgpt.test/secret-path");
+  };
+  const walk = await probe.walkList(get, "/list", { sleep: noSleep });
+  assert.equal(walk.items.length, 3);
+  assert.equal(walk.stop_reason, "fetch_error");
+  assert.equal(walk.pages.at(-1).error, "TypeError");
+  assert.ok(!JSON.stringify(walk.pages).includes("secret-path"));
+});
+
+test("toDate rejects numbers outside the Date range", () => {
+  assert.equal(probe.toDate(1e20), null);
+  assert.equal(probe.toDate("100000000000000000000"), null);
+  assert.deepEqual(probe.aggregate([{ update_time: 1e20 }], NOW).by_update_month, {
+    unknown: 1,
+  });
+});

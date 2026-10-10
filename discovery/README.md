@@ -42,8 +42,9 @@ constant at the top of `probe.js`.
 - Field names, their types and how often each appears.
 - The encoding of timestamp fields (ISO 8601, epoch seconds or epoch
   milliseconds).
-- Distinct values of fields that look project-related, truncated to 8
-  characters.
+- Distinct values of fields that look project-related. ID fields (names
+  ending in `id`) keep their first 8 characters; any other value is reduced
+  to its type and length, since it could be a project name.
 - Pagination fields and the page size the server actually used.
 - Conversation counts by month of `update_time` and `create_time`, and
   counts older than 30, 60, 90, 180 and 365 days.

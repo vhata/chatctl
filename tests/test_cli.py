@@ -112,3 +112,11 @@ def test_version(capsys):
 def test_commands_are_not_implemented(argv, capsys):
     assert main(argv) == 1
     assert capsys.readouterr().err == f"chatctl {argv[0]}: not implemented yet\n"
+
+
+@pytest.mark.parametrize("duration", ["5000y", "999999999d"])
+def test_archive_duration_reaching_before_year_one_is_a_usage_error(duration, capsys):
+    with pytest.raises(SystemExit) as exc_info:
+        main(["archive", "--older-than", duration])
+    assert exc_info.value.code == 2
+    assert "before year 1" in capsys.readouterr().err

@@ -178,7 +178,9 @@ at the top of the script if they differ.
   not the value itself.
 - For fields that may indicate project membership (any key containing
   `gizmo`, `project`, `workspace` or `snorlax`), the distribution of
-  distinct non-null values, with values truncated to 8 characters.
+  distinct values. Values of ID-named keys (ending in `id`) are truncated
+  to 8 characters; other values are reduced to type and length, since
+  they could be user-chosen names. (Amended after final review.)
 - `title` replaced by its length; `id` truncated to its first 8
   characters.
 

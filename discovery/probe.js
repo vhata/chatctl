@@ -26,6 +26,11 @@
   const SAMPLE_SIZE = 3;
   const PROJECT_KEY_RE = /gizmo|project|workspace|snorlax/i;
   const TIME_KEY_RE = /time|_at$/i;
+  const ID_KEY_RE = /(^|_)id$|[a-z]Id$/;
+  // Object keys are listed only when they look like field names. Maps keyed
+  // by IDs (or very wide objects) are reported by key count instead.
+  const FIELD_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,29}$/;
+  const MAX_LISTED_KEYS = 30;
   const DAY_MS = 86_400_000;
 
   function makeGet(fetchImpl, token) {
@@ -60,18 +65,28 @@
         return `<string:${value.length}>`;
       case "array":
         return `<array:${value.length}>`;
-      case "object":
-        return `<object:${Object.keys(value).join(",")}>`;
+      case "object": {
+        const keys = Object.keys(value);
+        const listable =
+          keys.length <= MAX_LISTED_KEYS &&
+          keys.every((key) => FIELD_NAME_RE.test(key) && !/\d{4,}/.test(key));
+        return listable ? `<object:${keys.join(",")}>` : `<object:${keys.length} keys>`;
+      }
       default:
         return `<${typeof value}>`;
     }
   }
 
-  // Like describe, but keeps the first 8 characters of strings. Used for IDs
-  // and project-membership fields, where a short prefix helps tell values
-  // apart without exposing them.
+  // Like describe, but keeps the first 8 characters of strings. Used for IDs,
+  // where a short prefix helps tell values apart without exposing them.
   function truncate(value) {
     return typeof value === "string" ? value.slice(0, 8) : describe(value);
+  }
+
+  // Project-related fields keep an 8-character prefix only when the key names
+  // an ID. Anything else (names, titles) could be user-chosen text.
+  function projectValue(key, value) {
+    return ID_KEY_RE.test(key) ? truncate(value) : describe(value);
   }
 
   function timestampFormat(value) {
@@ -91,7 +106,8 @@
   function toDate(value) {
     if (typeof value === "number") {
       if (!Number.isFinite(value)) return null;
-      return new Date(value > 1e11 ? value : value * 1000);
+      const date = new Date(value > 1e11 ? value : value * 1000);
+      return Number.isNaN(date.getTime()) ? null : date;
     }
     if (typeof value === "string") {
       if (/^\d+(\.\d+)?$/.test(value)) return toDate(Number(value));
@@ -120,8 +136,10 @@
     for (const [key, value] of Object.entries(item ?? {})) {
       if (key === "title") {
         out[key] = typeof value === "string" ? `<title:${value.length}>` : describe(value);
-      } else if (key === "id" || PROJECT_KEY_RE.test(key)) {
+      } else if (key === "id") {
         out[key] = truncate(value);
+      } else if (PROJECT_KEY_RE.test(key)) {
+        out[key] = projectValue(key, value);
       } else if (TIME_KEY_RE.test(key)) {
         out[key] = timestampFormat(value);
       } else {
@@ -151,7 +169,7 @@
         }
         if (PROJECT_KEY_RE.test(key)) {
           field.values ??= {};
-          bump(field.values, String(truncate(value)));
+          bump(field.values, String(projectValue(key, value)));
         }
       }
     }
@@ -187,7 +205,7 @@
   // Walks a paginated list endpoint. Stops on the first of: a non-200
   // response, a body without an items array, an empty page, a page that adds
   // no unseen IDs (the server ignoring offset), a reported total being
-  // reached, or maxPages. onPage(pageNumber, itemsSoFar) is called after each
+  // reached, a request that throws, or maxPages. onPage(pageNumber, itemsSoFar) is called after each
   // page that adds items.
   async function walkList(get, path, options = {}) {
     const {
@@ -208,9 +226,16 @@
 
     for (let page = 0; page < maxPages; page += 1) {
       if (page > 0) await sleep(delayMs);
-      const { status, body } = await get(
-        `${path}${separator}offset=${offset}&limit=${limit}&order=updated`,
-      );
+      let response;
+      try {
+        response = await get(`${path}${separator}offset=${offset}&limit=${limit}&order=updated`);
+      } catch (error) {
+        // Record only the error type: messages can embed URLs or response text.
+        pages.push({ offset, requested_limit: limit, error: error?.name ?? "Error" });
+        stopReason = "fetch_error";
+        break;
+      }
+      const { status, body } = response;
       const pageItems = Array.isArray(body?.items) ? body.items : null;
       pages.push({
         offset,
