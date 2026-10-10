@@ -1,5 +1,7 @@
 # ChatGPT Selective Bulk Archiver
 
+> **Note:** The tool has since been named **chatctl**. Examples below use the original working name `chatgpt-archive` (package `chatgpt_archiver`); read them as `chatctl`.
+
 ## Goal
 
 Build a small local tool for selectively archiving large numbers of old ChatGPT conversations.
