@@ -14,13 +14,18 @@ rather than here.
 
 ## How these findings were gathered
 
-- 2026-10-14: discovery probe (report version 1) run from the DevTools
-  console of a logged-in chatgpt.com tab in a Chromium-based browser. The
-  report itself is local and not committed.
-- Still to do: the Network tab checklist in
-  [`discovery/README.md`](../discovery/README.md), the local access check
-  in the same file, and a second probe run with the report additions made
-  after the first run (boolean value counts, nested object summaries).
+- 2026-10-14, first run: discovery probe (report version 1) from the
+  DevTools console of a logged-in chatgpt.com tab in a Chromium-based
+  browser.
+- 2026-10-14, Network tab: archived and then unarchived a throwaway
+  conversation from the web UI, capturing each request's URL, method,
+  status, payload and response. Clicked a project in the sidebar.
+- 2026-10-14, second run: probe with boolean value counts and nested
+  object summaries, run while the throwaway conversation was archived.
+- 2026-10-14, local access check: one `curl` GET with the bearer token, as
+  described in [`discovery/README.md`](../discovery/README.md).
+
+The probe reports are local and not committed.
 
 ## Questions
 
@@ -81,19 +86,29 @@ conversation, which is not a project. Ordinary conversations have
 same items as `gizmo_id`. `workspace_id` was null on every item.
 
 Projects are listed by `GET /backend-api/gizmos/snorlax/sidebar`, which
-returns `{items, cursor}`: each item has `gizmo` (a large object describing
-the project), `tools`, `files`, `product_features`,
-`has_tpp_conversation`, `project_file_limits` and
+returns `{items, cursor}`: each item has `gizmo`, `tools`, `files`,
+`product_features`, `has_tpp_conversation`, `project_file_limits` and
 `project_connector_scope_limits`. A non-empty `cursor` means it is
 cursor-paginated; the first page did not include every project referenced
 by conversations, so either later pages or deleted projects account for the
 rest.
 
-Evidence: probe 2026-10-14, value distribution of `gizmo_id` (prefixes
-only) and the projects probe.
+The `gizmo` object has 40 fields, including `id`, `gizmo_type` (a
+7-character string on every project, consistent with `snorlax`),
+`display`, `instructions`, `created_at`, `updated_at`,
+`last_interacted_at`, `num_interactions`, `is_archived`, `archived_at`,
+`memory_enabled` and `memory_scope`. It does not list the project's
+conversations.
 
-Open: the fields of the sidebar's `gizmo` object (the first report only
-showed its key count) and how the sidebar lists a project's conversations.
+The web UI loads the sidebar with
+`GET /backend-api/gizmos/snorlax/sidebar?conversations_per_gizmo=5&limit=...`
+when the page loads, which presumably embeds each project's most recent
+conversations. Expanding or collapsing a project in the sidebar makes no
+request.
+
+Evidence: probe 2026-10-14 (both runs), value distribution of `gizmo_id`
+(prefixes only), the projects probe's nested summary of `gizmo`, and the
+Network tab list on page load.
 
 ### 6. Are project conversations excluded from the ordinary conversation listing, or merely annotated?
 
@@ -106,15 +121,20 @@ prefix appeared in `/backend-api/conversations` results.
 
 ### 7. What operation does the current UI use for Archive?
 
-Finding:
+Finding: `PATCH /backend-api/conversation/<conversation-id>` (singular
+`conversation`) with the JSON body `{"is_archived": true}`. The response is
+HTTP 200 with `{"success": true}`.
 
-Evidence:
+Evidence: Network tab 2026-10-14, archiving a throwaway conversation from
+its sidebar menu.
 
 ### 8. What operation does it use for Unarchive?
 
-Finding:
+Finding: the same request with `{"is_archived": false}`. The response is
+HTTP 200 with `{"success": true}`.
 
-Evidence:
+Evidence: Network tab 2026-10-14, restoring the throwaway conversation from
+Settings, Data controls, Archived chats.
 
 ### 9. How is authentication performed?
 
@@ -130,41 +150,69 @@ returned 200.
 
 ### 10. Does a session credential work cleanly from a local process?
 
-Finding:
+Finding: no, not with a plain HTTP client. A `curl` GET to
+`/backend-api/conversations` with a valid bearer token returned HTTP 403
+with `server: cloudflare` and `cf-mitigated: challenge`: Cloudflare's bot
+check rejects the request before it reaches the API. Requests made from
+the logged-in page succeed.
 
-Evidence:
+Evidence: local access check 2026-10-14, output
+`403 server=cloudflare cf-mitigated=challenge`.
+
+Consequence: chatctl cannot make its requests from a standalone Python
+process using only the token. They need to run in a real browser session,
+either as a console script in the logged-in tab or through browser
+automation driving an authenticated profile.
 
 ### 11. Are there CSRF/origin checks that make browser-context execution preferable?
 
-Finding: none needed for GETs from the page's origin. Unknown for
-mutations and for requests from outside the browser.
+Finding: in-page requests need only the `Authorization` header: the probe's
+GETs and the UI's own archive PATCH both succeed from the page's origin.
+Outside the browser, Cloudflare's bot challenge blocks requests before any
+application-level CSRF or origin check could apply (see question 10).
+Whether the UI sends additional headers on the PATCH was not recorded.
 
-Evidence: probe 2026-10-14 sent only the `Authorization` header.
+Evidence: probe 2026-10-14; Network tab 2026-10-14; local access check
+2026-10-14.
 
 ### 12. What happens under rate limiting?
 
 Finding: not observed. The probe's sequential GETs with a 500 ms pause
-between pages received no 429s.
+between pages, run twice, received no 429s, and the UI's archive and
+unarchive requests succeeded first time.
 
-Evidence: probe 2026-10-14.
+Evidence: probe 2026-10-14 (both runs); Network tab 2026-10-14.
 
 ### 13. Does changing archive state immediately remove a conversation from the normal history endpoint?
 
-Finding: `GET /backend-api/conversations?is_archived=true` lists archived
-conversations, and items carry an `is_archived` boolean. Whether the
-default listing excludes archived conversations, and how quickly a change
-shows up, is not yet known.
+Finding: yes. The default listing excludes archived conversations
+entirely: every item it returned had `is_archived: false`, and every item
+from `GET /backend-api/conversations?is_archived=true` had
+`is_archived: true`. An archived conversation leaves the web UI's sidebar
+straight away, without a reload, and appeared in the archived listing in a
+probe run moments later.
 
-Evidence: probe 2026-10-14, archived listing returned HTTP 200 with
-`is_archived: true` samples.
+Evidence: Network tab and second probe run 2026-10-14, with the throwaway
+conversation archived.
 
 ### 14. Is there any starred/pinned metadata worth supporting?
 
-Finding: `is_starred` (null on most items, boolean on a few) and
-`pinned_time` (null on every item) exist. Either is a candidate for a
-`--keep-starred` style exclusion.
+Finding: `is_starred` exists (null on most items, `false` on a few, `true`
+on none in the observed account) and `pinned_time` exists (null on every
+item). Either is a candidate for a `--keep-starred` style exclusion, but
+neither is in use in the observed account.
 
-Evidence: probe 2026-10-14.
+`is_automation_conversation` is `true` on some items. These are likely
+conversations created by scheduled tasks, and are a candidate for an
+exclusion option.
+
+Evidence: probe 2026-10-14 (second run, boolean value counts).
+
+## Decisions
+
+- 2026-10-14: chatctl skips every conversation with a non-null `gizmo_id`.
+  That covers project conversations (`g-p-` prefix) and custom GPT
+  conversations (other `g-` prefixes); neither is ever archived.
 
 ## Other observations
 

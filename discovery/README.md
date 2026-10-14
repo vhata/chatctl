@@ -97,9 +97,9 @@ token and cookies from the copy, since both include them.
    request.
 5. **Star.** If the chat menu offers a star or pin option, use it on the
    throwaway chat, capture the request, then undo it.
-6. **Projects.** Open a project and capture the request that lists its
-   conversations: its path, any paging parameters and the top-level
-   response keys.
+6. **Projects.** Reload the page and capture the `sidebar?...` request,
+   which loads projects and their recent conversations. Expanding or
+   collapsing a project in the sidebar makes no request.
 7. **Rate limiting.** Note any request that returned 429, and its
    `Retry-After` header if present.
 
