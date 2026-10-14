@@ -31,6 +31,7 @@
   // by IDs (or very wide objects) are reported by key count instead.
   const FIELD_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,29}$/;
   const MAX_LISTED_KEYS = 30;
+  const NESTED_SUMMARY_DEPTH = 1;
   const DAY_MS = 86_400_000;
 
   function makeGet(fetchImpl, token) {
@@ -45,6 +46,10 @@
       }
       return { status: response.status, body };
     };
+  }
+
+  function isFieldName(key) {
+    return FIELD_NAME_RE.test(key) && !/\d{4,}/.test(key);
   }
 
   function typeOf(value) {
@@ -67,9 +72,7 @@
         return `<array:${value.length}>`;
       case "object": {
         const keys = Object.keys(value);
-        const listable =
-          keys.length <= MAX_LISTED_KEYS &&
-          keys.every((key) => FIELD_NAME_RE.test(key) && !/\d{4,}/.test(key));
+        const listable = keys.length <= MAX_LISTED_KEYS && keys.every(isFieldName);
         return listable ? `<object:${keys.join(",")}>` : `<object:${keys.length} keys>`;
       }
       default:
@@ -156,8 +159,13 @@
     );
   }
 
-  function summariseItems(items) {
+  // Field names, types and safe value distributions for a list of objects.
+  // Booleans get true/false counts. Object-valued fields whose keys all look
+  // like field names are summarised recursively, depth levels down; maps keyed
+  // by IDs are never descended into, so their keys stay out of the report.
+  function summariseItems(items, depth = NESTED_SUMMARY_DEPTH) {
     const fields = {};
+    const nested = {};
     for (const item of items) {
       for (const [key, value] of Object.entries(item ?? {})) {
         const field = (fields[key] ??= { count: 0, types: {} });
@@ -171,7 +179,17 @@
           field.values ??= {};
           bump(field.values, String(projectValue(key, value)));
         }
+        if (typeof value === "boolean") {
+          field.booleans ??= {};
+          bump(field.booleans, String(value));
+        }
+        if (depth > 0 && typeOf(value) === "object" && Object.keys(value).every(isFieldName)) {
+          (nested[key] ??= []).push(value);
+        }
       }
+    }
+    for (const [key, values] of Object.entries(nested)) {
+      fields[key].fields = summariseItems(values, depth - 1).fields;
     }
     return { item_count: items.length, fields };
   }
@@ -205,8 +223,8 @@
   // Walks a paginated list endpoint. Stops on the first of: a non-200
   // response, a body without an items array, an empty page, a page that adds
   // no unseen IDs (the server ignoring offset), a reported total being
-  // reached, a request that throws, or maxPages. onPage(pageNumber, itemsSoFar) is called after each
-  // page that adds items.
+  // reached, a request that throws, or maxPages. onPage(pageNumber,
+  // itemsSoFar) is called after each page that adds items.
   async function walkList(get, path, options = {}) {
     const {
       firstLimit = FIRST_PAGE_LIMIT,
@@ -270,12 +288,12 @@
       }
       onPage(page + 1, items.length);
       offset += pageItems.length;
+      limit = typeof body.limit === "number" && body.limit > 0 ? body.limit : pageItems.length;
+      effectiveLimit ??= limit;
       if (typeof body.total === "number" && offset >= body.total) {
         stopReason = "reached_total";
         break;
       }
-      limit = typeof body.limit === "number" && body.limit > 0 ? body.limit : pageItems.length;
-      effectiveLimit ??= limit;
     }
 
     return {

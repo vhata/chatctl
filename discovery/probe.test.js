@@ -344,3 +344,51 @@ test("toDate rejects numbers outside the Date range", () => {
     unknown: 1,
   });
 });
+
+test("summariseItems counts boolean values", () => {
+  const summary = probe.summariseItems([
+    { is_archived: false },
+    { is_archived: true },
+    { is_archived: false },
+    { is_archived: null },
+  ]);
+  assert.deepEqual(summary.fields.is_archived.booleans, { false: 2, true: 1 });
+  assert.equal(summary.fields.is_archived.count, 4);
+});
+
+test("summariseItems summarises nested objects one level down", () => {
+  const summary = probe.summariseItems([
+    {
+      gizmo: {
+        id: "g-p-abcdef123456",
+        display: { name: "Home server" },
+        gizmo_type: "snorlax",
+        archived: false,
+      },
+    },
+    { gizmo: { id: "g-p-zzzzzzzzzzzz", archived: true } },
+  ]);
+  const nested = summary.fields.gizmo.fields;
+  assert.deepEqual(nested.id, { count: 2, types: { string: 2 } });
+  assert.deepEqual(nested.display.types, { object: 1 });
+  assert.equal(nested.display.fields, undefined);
+  assert.deepEqual(nested.gizmo_type.values, { "<string:7>": 1 });
+  assert.deepEqual(nested.archived.booleans, { false: 1, true: 1 });
+  const text = JSON.stringify(summary);
+  assert.ok(!text.includes("Home server"));
+  assert.ok(!text.includes("abcdef123456"));
+});
+
+test("summariseItems does not descend into ID-keyed maps", () => {
+  const uuid = "11111111-2222-3333-4444-555555555555";
+  const summary = probe.summariseItems([{ mapping: { [uuid]: { parent: null } } }]);
+  assert.equal(summary.fields.mapping.fields, undefined);
+  assert.ok(!JSON.stringify(summary).includes(uuid));
+});
+
+test("walkList records the page size when the first page reaches total", async () => {
+  const get = getFor(() => ({ body: { items: conversations(2), total: 2, limit: 28 } }));
+  const walk = await probe.walkList(get, "/list", { sleep: noSleep });
+  assert.equal(walk.stop_reason, "reached_total");
+  assert.equal(walk.effective_limit, 28);
+});
