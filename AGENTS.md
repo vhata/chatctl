@@ -22,7 +22,7 @@ chatctl is a personal, local tool for selectively bulk-archiving old
 ChatGPT conversations. [`README.md`](README.md) has the current status.
 [`docs/initial-plan.md`](docs/initial-plan.md) is the original brief.
 Design specs live in [`docs/specs/`](docs/specs/), implementation plans in
-[`plans/`](plans/), and the code's structure and invariants in
+`plans/`, and the code's structure and invariants in
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Environment

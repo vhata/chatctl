@@ -1,6 +1,6 @@
 # Architecture
 
-What the structure is now, the boundaries parallel work must respect, and the invariants reviews check. The original brief is [docs/initial-plan.md](docs/initial-plan.md), designs ahead of the work are in [docs/specs/](docs/specs/) and plans in [plans/](plans/); this file describes the code as it is.
+What the structure is now, the boundaries parallel work must respect, and the invariants reviews check. The original brief is [docs/initial-plan.md](docs/initial-plan.md), designs ahead of the work are in [docs/specs/](docs/specs/) and plans in `plans/`; this file describes the code as it is.
 
 ## Layout
 
