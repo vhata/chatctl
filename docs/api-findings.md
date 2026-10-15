@@ -114,7 +114,9 @@ Network tab list on page load.
 
 Finding: annotated, not excluded. The ordinary listing includes project
 and custom GPT conversations alongside ordinary ones. chatctl must filter
-on `gizmo_id` itself.
+on `gizmo_id` itself; it skips every conversation with a non-null
+`gizmo_id` (rule in [`AGENTS.md`](../AGENTS.md#rules), reasoning in
+[`DECISIONS.md`](DECISIONS.md)).
 
 Evidence: probe 2026-10-14, non-null `gizmo_id` values with the `g-p-`
 prefix appeared in `/backend-api/conversations` results.
@@ -207,12 +209,6 @@ conversations created by scheduled tasks, and are a candidate for an
 exclusion option.
 
 Evidence: probe 2026-10-14 (second run, boolean value counts).
-
-## Decisions
-
-- 2026-10-14: chatctl skips every conversation with a non-null `gizmo_id`.
-  That covers project conversations (`g-p-` prefix) and custom GPT
-  conversations (other `g-` prefixes); neither is ever archived.
 
 ## Other observations
 

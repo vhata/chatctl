@@ -32,8 +32,9 @@ All requests are GETs, made through a single helper:
 4. `GET /backend-api/gizmos/snorlax/sidebar`, which is believed to list
    projects.
 
-These paths are educated guesses. If a probe comes back with an error or an
-unexpected shape, open the Network tab, filter by `backend-api`, reload the
+These paths started as educated guesses; the 2026-10-14 runs confirmed
+them (see [`docs/api-findings.md`](../docs/api-findings.md)). If a probe
+comes back with an error or an unexpected shape, open the Network tab, filter by `backend-api`, reload the
 page, find the request the sidebar actually makes, and edit the `ENDPOINTS`
 constant at the top of `probe.js`.
 

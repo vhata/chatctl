@@ -4,7 +4,7 @@ Read when changing code or preparing a PR. This document describes the gates as 
 
 ## What quality means here
 
-- Account safety above everything else: nothing touches a ChatGPT account without `--apply`, the mutation set is fixed in a manifest before the first change, and project conversations are never archived. The rules are in [AGENTS.md](../AGENTS.md#rules); tests and reviews hold code to them.
+- Account safety above everything else: nothing touches a ChatGPT account without `--apply`, the mutation set is fixed in a manifest before the first change, and project and custom GPT conversations are never archived. The rules are in [AGENTS.md](../AGENTS.md#rules); tests and reviews hold code to them.
 - Selection is exact and predictable: the cutoff and filters pick precisely the conversations the dry run shows, with no dependence on the wall clock inside the pure helpers.
 - No account data in the repository: titles, full conversation IDs, tokens, probe reports, HAR files and manifests stay local.
 - Deliberately manual: running the discovery probe and anything else against a real ChatGPT account. The user does that in their own browser session.
@@ -43,7 +43,7 @@ Toolchain pins: `.python-version` (3.12) and `uv.lock` for Python, `.nvmrc` (Nod
 
 Read by `docket/CODE_REVIEW_GUIDE.md`, which links this section by its heading, so keep the heading as it is; a codebase review runs and records exactly what is listed here.
 
-- Focus areas: the correctness boundaries under [What quality means here](#what-quality-means-here) and the invariants in [ARCHITECTURE.md](../ARCHITECTURE.md#invariants). Above all, any path by which a conversation could be archived without `--apply`, outside the manifest, or while it belongs to a project.
+- Focus areas: the correctness boundaries under [What quality means here](#what-quality-means-here) and the invariants in [ARCHITECTURE.md](../ARCHITECTURE.md#invariants). Above all, any path by which a conversation could be archived without `--apply`, outside the manifest, or while it belongs to a project or a custom GPT.
 - Baseline commands beyond `bash scripts/check.sh`: `bash scripts/smoke.sh` (record pass or fail and the printed version).
 - Drift checks for an incremental review: the CLI documented in `README.md` against `chatctl/cli.py`; claims in `docs/api-findings.md` against the code that depends on them; plan status in `plans/` against merged work; this document against `.githooks/` and `.github/workflows/ci.yml`; `noqa` and `type: ignore` counts.
 - Source paths for `bash docket/scripts/review-due.sh --paths "chatctl tests discovery"`.

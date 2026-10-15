@@ -21,7 +21,7 @@ What the structure is now, the boundaries parallel work must respect, and the in
 
 - `chatctl/selection.py` reads no clock: the current time is passed in as a timezone-aware `now`. Callers in `cli.py` supply `datetime.now(UTC)`.
 - Every network request in `discovery/probe.js` goes through `makeGet`, which issues GET requests only.
-- The safety rules in [AGENTS.md](AGENTS.md#rules) (dry run without `--apply`, a fixed manifest before the first change, never touching project conversations, no account data in the repository) apply to all code; this file does not restate them.
+- The safety rules in [AGENTS.md](AGENTS.md#rules) (dry run without `--apply`, a fixed manifest before the first change, never touching project or custom GPT conversations, no account data in the repository) apply to all code; this file does not restate them.
 
 ## Isolation for concurrent work
 
