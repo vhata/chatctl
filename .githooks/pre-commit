@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Check-only pre-commit hook: nothing is rewritten. Ruff checks the staged
-# content of each staged Python file (not the working tree copy), and the
-# queue validator runs when a queue file is staged. Installed by
-# scripts/setup.sh. See docs/QUALITY.md.
+# Check-only pre-commit hook: nothing is rewritten, and every check reads
+# the staged content (the index), not the working copy. Ruff format-checks
+# staged Python files and the Python code blocks in staged Markdown files,
+# and lints staged Python files; the queue validator runs on the staged
+# queue files when either is staged. Installed by scripts/setup.sh. See
+# docs/QUALITY.md.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -12,13 +14,30 @@ while IFS= read -r -d '' path; do
     echo "pre-commit: $path is not formatted (run bash scripts/format.sh)" >&2
     status=1
   fi
-  if ! git show ":$path" | uv run --locked --quiet ruff check --stdin-filename "$path" -; then
-    status=1
-  fi
-done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.py')
+  case "$path" in
+    *.py)
+      if ! git show ":$path" | uv run --locked --quiet ruff check --stdin-filename "$path" -; then
+        status=1
+      fi
+      ;;
+  esac
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.py' '*.md' ':!:docket/')
 
-if git diff --cached --name-only --diff-filter=ACMRD -- TODO.md review/BACKLOG.md | grep -q .; then
-  bash docket/scripts/check-queues.sh || status=1
+if ! git diff --cached --quiet --diff-filter=ACMRD -- TODO.md review/BACKLOG.md; then
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  args=()
+  if git cat-file -e :TODO.md 2> /dev/null; then
+    git show :TODO.md > "$tmp/TODO.md"
+    args+=(--todo "$tmp/TODO.md")
+  fi
+  if git cat-file -e :review/BACKLOG.md 2> /dev/null; then
+    git show :review/BACKLOG.md > "$tmp/BACKLOG.md"
+    args+=(--backlog "$tmp/BACKLOG.md")
+  fi
+  if [ "${#args[@]}" -gt 0 ]; then
+    bash docket/scripts/check-queues.sh "${args[@]}" || status=1
+  fi
 fi
 
 exit "$status"
