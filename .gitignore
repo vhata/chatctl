@@ -13,3 +13,7 @@ chatctl-probe-*.json
 *.har
 archive-run-*.json
 archive-run-*.failures.json
+
+# Docket worktrees and unattended-run records
+.worktrees/
+.docket/

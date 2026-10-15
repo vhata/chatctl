@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Check-only pre-commit hook: nothing is rewritten. Ruff checks the staged
+# content of each staged Python file (not the working tree copy), and the
+# queue validator runs when a queue file is staged. Installed by
+# scripts/setup.sh. See docs/QUALITY.md.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+status=0
+while IFS= read -r -d '' path; do
+  if ! git show ":$path" | uv run --locked --quiet ruff format --check --stdin-filename "$path" - > /dev/null; then
+    echo "pre-commit: $path is not formatted (run bash scripts/format.sh)" >&2
+    status=1
+  fi
+  if ! git show ":$path" | uv run --locked --quiet ruff check --stdin-filename "$path" -; then
+    status=1
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.py')
+
+if git diff --cached --name-only --diff-filter=ACMRD -- TODO.md review/BACKLOG.md | grep -q .; then
+  bash docket/scripts/check-queues.sh || status=1
+fi
+
+exit "$status"
