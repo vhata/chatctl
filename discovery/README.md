@@ -51,11 +51,11 @@ actually makes, and edit the `ENDPOINTS` constant at the top of
 - For object-valued fields, the same field summary one level down (for
   example the fields of each project's `gizmo` object). This is limited
   to objects whose keys look like the API's own lower-case field names
-  and that have at most 60 keys, and to at most 80 distinct keys across
-  all items; past that the distinct keys are counted, not listed. The
-  test is a heuristic: it keeps out maps keyed by IDs and capitalised or
-  numbered keys, but a short lower-case key holding user text would get
-  through.
+  and that have at most 60 keys; wider objects are not descended into.
+  Past 80 distinct keys across all items, the keys are counted, not
+  listed. The test is a heuristic: it keeps out maps keyed by IDs and
+  capitalised or numbered keys, but a short lower-case key holding user
+  text would get through.
 - Pagination fields and the page size the server actually used.
 - Conversation counts by month of `update_time` and `create_time`, and
   counts older than 30, 60, 90, 180 and 365 days.
