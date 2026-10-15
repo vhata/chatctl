@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Python tests (pytest) and the discovery probe's tests (node --test).
 # Extra arguments are passed to pytest, except --junitxml and
-# -p no:junitxml, which would break the pass count below. Each suite must pass at least one
-# test: a suite that collects nothing, or skips everything, fails here.
+# -p no:junitxml, which would break the pass count below. Each suite must
+# pass at least one test: a suite that collects nothing, or skips
+# everything, fails here.
 # pytest exits 5 on empty collection but 0 when every test is skipped, so
 # its JUnit report is checked; node exits 0 in both cases, so its TAP
 # summary is checked.
