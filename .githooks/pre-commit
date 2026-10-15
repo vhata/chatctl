@@ -23,20 +23,24 @@ while IFS= read -r -d '' path; do
   esac
 done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.py' '*.md' ':!:docket/')
 
+# The validator reads TODO.md and review/BACKLOG.md relative to the repo
+# root, so the staged copies are written to a scratch directory outside any
+# repository and validated there. A queue file staged for deletion is
+# simply absent.
 if ! git diff --cached --quiet --diff-filter=ACMRD -- TODO.md review/BACKLOG.md; then
+  repo="$PWD"
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
-  args=()
-  if git cat-file -e :TODO.md 2> /dev/null; then
-    git show :TODO.md > "$tmp/TODO.md"
-    args+=(--todo "$tmp/TODO.md")
-  fi
-  if git cat-file -e :review/BACKLOG.md 2> /dev/null; then
-    git show :review/BACKLOG.md > "$tmp/BACKLOG.md"
-    args+=(--backlog "$tmp/BACKLOG.md")
-  fi
-  if [ "${#args[@]}" -gt 0 ]; then
-    bash docket/scripts/check-queues.sh "${args[@]}" || status=1
+  for f in TODO.md review/BACKLOG.md; do
+    if git cat-file -e ":$f" 2> /dev/null; then
+      mkdir -p "$tmp/$(dirname "$f")"
+      git show ":$f" > "$tmp/$f"
+    fi
+  done
+  if [ -e "$tmp/TODO.md" ] || [ -e "$tmp/review/BACKLOG.md" ]; then
+    (cd "$tmp" && env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+      GIT_CEILING_DIRECTORIES="$(dirname "$tmp")" \
+      bash "$repo/docket/scripts/check-queues.sh") || status=1
   fi
 fi
 

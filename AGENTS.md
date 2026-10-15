@@ -41,8 +41,8 @@ Design specs live in [`docs/specs/`](docs/specs/), implementation plans in
 
 Run `bash scripts/check.sh` before committing. It runs the formatter
 check, ruff and both test suites (pytest and `node --test discovery/`).
-CI runs it along with `scripts/smoke.sh` and `docket/scripts/ci.sh`. [`docs/QUALITY.md`](docs/QUALITY.md) lists every gate and
-where it runs.
+CI runs it along with `scripts/smoke.sh` and `docket/scripts/ci.sh`.
+[`docs/QUALITY.md`](docs/QUALITY.md) lists every gate and where it runs.
 
 ## Rules
 
