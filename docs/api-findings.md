@@ -80,10 +80,13 @@ for both fields.
 ### 5. How are project conversations identified?
 
 Finding: by `gizmo_id`. Project conversations have a `gizmo_id` beginning
-`g-p-`. A `gizmo_id` beginning `g-` without `-p-` is a custom GPT
-conversation, which is not a project. Ordinary conversations have
-`gizmo_id: null`. `conversation_template_id` was non-null on exactly the
-same items as `gizmo_id`. `workspace_id` was null on every item.
+`g-p-`. A `gizmo_id` beginning `g-` without `-p-` is taken to be a custom
+GPT conversation, which is not a project; that reading comes from the ID
+scheme, not from checking those conversations one by one, and the skip
+rule does not depend on it. Ordinary conversations have `gizmo_id: null`.
+`conversation_template_id` was non-null on the same number of items as
+`gizmo_id`; the probe does not record whether they are the same items.
+`workspace_id` was null on every item.
 
 Projects are listed by `GET /backend-api/gizmos/snorlax/sidebar`, which
 returns `{items, cursor}`: each item has `gizmo`, `tools`, `files`,
@@ -113,10 +116,8 @@ Network tab list on page load.
 ### 6. Are project conversations excluded from the ordinary conversation listing, or merely annotated?
 
 Finding: annotated, not excluded. The ordinary listing includes project
-and custom GPT conversations alongside ordinary ones. chatctl must filter
-on `gizmo_id` itself; it skips every conversation with a non-null
-`gizmo_id` (rule in [`AGENTS.md`](../AGENTS.md#rules), reasoning in
-[`DECISIONS.md`](DECISIONS.md)).
+and custom GPT conversations alongside ordinary ones, so chatctl has to
+filter on `gizmo_id` itself (rule in [`AGENTS.md`](../AGENTS.md#rules)).
 
 Evidence: probe 2026-10-14, non-null `gizmo_id` values with the `g-p-`
 prefix appeared in `/backend-api/conversations` results.
@@ -152,27 +153,31 @@ returned 200.
 
 ### 10. Does a session credential work cleanly from a local process?
 
-Finding: no, not with a plain HTTP client. A `curl` GET to
-`/backend-api/conversations` with a valid bearer token returned HTTP 403
-with `server: cloudflare` and `cf-mitigated: challenge`: Cloudflare's bot
-check rejects the request before it reaches the API. Requests made from
-the logged-in page succeed.
+Finding: not with a plain HTTP client carrying only the token. A `curl`
+GET to `/backend-api/conversations` with a freshly copied bearer token and
+curl's default headers returned HTTP 403 with `server: cloudflare` and
+`cf-mitigated: challenge`: Cloudflare's bot check stopped the request
+before it reached the API, so the token itself was never tested. Adding
+the session cookies, a browser `User-Agent` or a browser-like TLS client
+has not been tried. Requests made from the logged-in page succeed, so
+running inside a real browser session is the only route known to work.
 
 Evidence: local access check 2026-10-14, output
-`403 server=cloudflare cf-mitigated=challenge`.
-
-Consequence: chatctl cannot make its requests from a standalone Python
-process using only the token. They need to run in a real browser session,
-either as a console script in the logged-in tab or through browser
-automation driving an authenticated profile.
+`403 server=cloudflare cf-mitigated=challenge`. How chatctl reaches a
+browser session is queued as `choose-browser-transport` in
+[`TODO.md`](../TODO.md).
 
 ### 11. Are there CSRF/origin checks that make browser-context execution preferable?
 
-Finding: in-page requests need only the `Authorization` header: the probe's
-GETs and the UI's own archive PATCH both succeed from the page's origin.
-Outside the browser, Cloudflare's bot challenge blocks requests before any
-application-level CSRF or origin check could apply (see question 10).
-Whether the UI sends additional headers on the PATCH was not recorded.
+Finding: for GETs, none observed. The probe's GETs from the page's origin
+succeed with only the `Authorization` header added. For the archive
+PATCH this is open: the UI's own PATCH succeeds, but the names of the
+headers it sends (for example any sentinel, device or CSRF header) were
+not recorded, so it is not known whether a PATCH with only
+`Authorization` would be accepted. Capture the header names before any
+code sends a PATCH. Outside the browser, Cloudflare's bot challenge
+blocks requests before any application-level check could apply (see
+question 10).
 
 Evidence: probe 2026-10-14; Network tab 2026-10-14; local access check
 2026-10-14.
@@ -192,7 +197,8 @@ entirely: every item it returned had `is_archived: false`, and every item
 from `GET /backend-api/conversations?is_archived=true` had
 `is_archived: true`. An archived conversation leaves the web UI's sidebar
 straight away, without a reload, and appeared in the archived listing in a
-probe run moments later.
+probe run moments later. Whether it stayed out of the sidebar after a
+page reload was not recorded.
 
 Evidence: Network tab and second probe run 2026-10-14, with the throwaway
 conversation archived.
@@ -202,7 +208,8 @@ conversation archived.
 Finding: `is_starred` exists (null on most items, `false` on a few, `true`
 on none in the observed account) and `pinned_time` exists (null on every
 item). Either is a candidate for a `--keep-starred` style exclusion, but
-neither is in use in the observed account.
+neither is in use in the observed account. No star or pin request was
+captured, so how the UI sets them is not known.
 
 `is_automation_conversation` is `true` on some items. These are likely
 conversations created by scheduled tasks, and are a candidate for an

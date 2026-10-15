@@ -30,6 +30,10 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 ### Unprioritized
 
+- [API] `choose-browser-transport` — **Decide how chatctl's requests reach a logged-in browser session, and record it.** A plain HTTP client carrying only the token is stopped by Cloudflare's bot challenge (`docs/api-findings.md`, question 10), so the listing, archive and undo code has nothing to send requests through.
+  - Source: vhata/probe-findings (#2), 2026-10-14
+  - Starting point: the candidates are a console script pasted into the tab, browser automation of an authenticated profile, and evaluating JavaScript in an open chatgpt.com tab over the DevTools protocol, for example through the user's `remaldi evaluate --target <tab>` against Vivaldi started with `--remote-debugging-port`. On 2026-10-14 one read-only session and list request made that way returned 200 with the expected keys; that is a lead, not a recorded finding. A proof of concept should page the full listing that way, record the result in `docs/api-findings.md`, and add the choice to `docs/DECISIONS.md`.
+
 ## Ready for separate work
 
 ### P0 Critical

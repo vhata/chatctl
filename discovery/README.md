@@ -29,14 +29,14 @@ All requests are GETs, made through a single helper:
    page, until an empty page, the reported total, a page with nothing new,
    an error, or 200 pages.
 3. The first page of the same endpoint with `is_archived=true`.
-4. `GET /backend-api/gizmos/snorlax/sidebar`, which is believed to list
-   projects.
+4. `GET /backend-api/gizmos/snorlax/sidebar`, which lists projects.
 
 These paths started as educated guesses; the 2026-10-14 runs confirmed
 them (see [`docs/api-findings.md`](../docs/api-findings.md)). If a probe
-comes back with an error or an unexpected shape, open the Network tab, filter by `backend-api`, reload the
-page, find the request the sidebar actually makes, and edit the `ENDPOINTS`
-constant at the top of `probe.js`.
+comes back with an error or an unexpected shape, open the Network tab,
+filter by `backend-api`, reload the page, find the request the sidebar
+actually makes, and edit the `ENDPOINTS` constant at the top of
+`probe.js`.
 
 ### What the report contains
 
@@ -49,8 +49,13 @@ constant at the top of `probe.js`.
   ending in `id`) keep their first 8 characters; any other value is reduced
   to its type and length, since it could be a project name.
 - For object-valued fields, the same field summary one level down (for
-  example the fields of each project's `gizmo` object). Objects keyed by
-  IDs are reported only by key count and never descended into.
+  example the fields of each project's `gizmo` object). This is limited
+  to objects whose keys look like the API's own lower-case field names
+  and that have at most 60 keys, and to at most 80 distinct keys across
+  all items; past that the distinct keys are counted, not listed. The
+  test is a heuristic: it keeps out maps keyed by IDs and capitalised or
+  numbered keys, but a short lower-case key holding user text would get
+  through.
 - Pagination fields and the page size the server actually used.
 - Conversation counts by month of `update_time` and `create_time`, and
   counts older than 30, 60, 90, 180 and 365 days.
@@ -123,12 +128,23 @@ Do not paste it into chats, files or shell history.
    copy((await (await fetch("/api/auth/session")).json()).accessToken)
    ```
 
-2. In a terminal (bash or zsh), run the following. At the first line, paste
-   the token and press Enter; nothing is echoed and it does not reach your
-   history.
+2. In a terminal (bash or zsh), run this line on its own, then paste the
+   token and press Enter. Nothing is echoed and the token does not reach
+   your history.
 
    ```bash
    read -rs CHATGPT_TOKEN
+   ```
+
+   Run it by itself rather than pasting it together with the next block:
+   without bracketed paste (macOS's `/bin/bash` 3.2, some terminal and
+   tmux setups), `read` would take the next pasted line as the token, and
+   the token pasted afterwards would run as a command and land in your
+   history.
+
+3. Then run the request. It needs curl 7.84 or later for `%header{...}`.
+
+   ```bash
    curl -sS -o /dev/null \
      -w '%{http_code} server=%header{server} cf-mitigated=%header{cf-mitigated}\n' \
      -H @<(printf 'Authorization: Bearer %s\n' "$CHATGPT_TOKEN") \
@@ -139,9 +155,10 @@ Do not paste it into chats, files or shell history.
 
    The header is passed through a process substitution so the token does
    not appear in the process list. `pbcopy < /dev/null` clears the macOS
-   clipboard.
+   clipboard, but not copies kept by a clipboard manager or synced by
+   Universal Clipboard; clear those separately if you use them.
 
-3. Record the output line. `200` means the token works from a local
+4. Record the output line. `200` means the token works from a local
    process. `401` means it was rejected. `403` together with
    `cf-mitigated=challenge` means a bot check blocked the request, which
    would favour running chatctl's requests from the browser.

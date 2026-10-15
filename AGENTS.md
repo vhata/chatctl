@@ -51,9 +51,10 @@ CI runs it along with `scripts/smoke.sh` and `docket/scripts/ci.sh`.
   implemented must exit non-zero.
 - The full mutation set is fixed and written to a manifest before the first
   change. Do not select conversations lazily while mutating.
-- Never archive project conversations or custom GPT conversations: skip
-  every conversation whose `gizmo_id` is non-null. If membership is
-  ambiguous, skip the conversation.
+- Never archive project conversations or custom GPT conversations: only
+  conversations whose `gizmo_id` field is present and null may be
+  archived. A missing field, or any other doubt about membership, means
+  the conversation is skipped.
 - `discovery/probe.js` is GET-only. All of its requests go through
   `makeGet`. Do not add other network calls.
 - Code may only depend on undocumented ChatGPT endpoints once their
