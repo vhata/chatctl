@@ -11,8 +11,8 @@
 (() => {
   "use strict";
 
-  // Hypothesised endpoints. Compare them with the Network tab and edit here
-  // if the web app uses something different.
+  // Endpoints confirmed on 2026-10-14 (docs/api-findings.md). Compare them
+  // with the Network tab and edit here if the web app changes.
   const ENDPOINTS = {
     session: "/api/auth/session",
     conversations: "/backend-api/conversations",
@@ -31,7 +31,13 @@
   // by IDs (or very wide objects) are reported by key count instead.
   const FIELD_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,29}$/;
   const MAX_LISTED_KEYS = 30;
+  // Nested summaries descend only into objects whose keys look like schema
+  // fields (see isSchemaKey), with at most MAX_NESTED_KEYS keys each, and
+  // only while all items together have at most MAX_NESTED_FIELDS distinct
+  // keys. Past that cap the keys are counted, not listed.
   const NESTED_SUMMARY_DEPTH = 1;
+  const MAX_NESTED_KEYS = 60;
+  const MAX_NESTED_FIELDS = 80;
   const DAY_MS = 86_400_000;
 
   function makeGet(fetchImpl, token) {
@@ -50,6 +56,19 @@
 
   function isFieldName(key) {
     return FIELD_NAME_RE.test(key) && !/\d{4,}/.test(key);
+  }
+
+  // Stricter than isFieldName, for keys listed once per distinct key across
+  // every item rather than in a few samples: the API's own fields are
+  // lower-case snake_case, while map keys tend to be IDs or user text.
+  function isSchemaKey(key) {
+    return isFieldName(key) && /^[a-z]/.test(key) && !/^[0-9a-f]{8,}$/i.test(key);
+  }
+
+  function isSchemaObject(value) {
+    if (typeOf(value) !== "object") return false;
+    const keys = Object.keys(value);
+    return keys.length <= MAX_NESTED_KEYS && keys.every(isSchemaKey);
   }
 
   function typeOf(value) {
@@ -160,12 +179,13 @@
   }
 
   // Field names, types and safe value distributions for a list of objects.
-  // Booleans get true/false counts. Object-valued fields whose keys all look
-  // like field names are summarised recursively, depth levels down; maps keyed
-  // by IDs are never descended into, so their keys stay out of the report.
+  // Booleans get true/false counts. Object-valued fields that pass
+  // isSchemaObject are summarised recursively, depth levels down; other
+  // objects, such as maps keyed by IDs, are not descended into. The objects
+  // have no prototype, so a "__proto__" key is an ordinary field.
   function summariseItems(items, depth = NESTED_SUMMARY_DEPTH) {
-    const fields = {};
-    const nested = {};
+    const fields = Object.create(null);
+    const nested = Object.create(null);
     for (const item of items) {
       for (const [key, value] of Object.entries(item ?? {})) {
         const field = (fields[key] ??= { count: 0, types: {} });
@@ -183,13 +203,18 @@
           field.booleans ??= {};
           bump(field.booleans, String(value));
         }
-        if (depth > 0 && typeOf(value) === "object" && Object.keys(value).every(isFieldName)) {
+        if (depth > 0 && isSchemaObject(value)) {
           (nested[key] ??= []).push(value);
         }
       }
     }
     for (const [key, values] of Object.entries(nested)) {
-      fields[key].fields = summariseItems(values, depth - 1).fields;
+      const distinct = new Set(values.flatMap((value) => Object.keys(value)));
+      if (distinct.size > MAX_NESTED_FIELDS) {
+        fields[key].fields_omitted = distinct.size;
+      } else {
+        fields[key].fields = summariseItems(values, depth - 1).fields;
+      }
     }
     return { item_count: items.length, fields };
   }

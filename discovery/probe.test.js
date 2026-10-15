@@ -386,6 +386,44 @@ test("summariseItems does not descend into ID-keyed maps", () => {
   assert.ok(!JSON.stringify(summary).includes(uuid));
 });
 
+test("summariseItems does not descend into maps keyed by IDs or user text", () => {
+  const keys = [
+    "deadbeefcafe",
+    "a1b2c3d4e5f6",
+    "k12345",
+    "Taxes",
+    "11111111-2222-3333-4444-555555555555",
+  ];
+  for (const key of keys) {
+    const summary = probe.summariseItems([{ mapping: { [key]: 1 } }]);
+    assert.equal(summary.fields.mapping.fields, undefined, key);
+    assert.ok(!JSON.stringify(summary).includes(key), key);
+  }
+});
+
+test("summariseItems does not descend into wide objects or arrays", () => {
+  const wide = Object.fromEntries(Array.from({ length: 61 }, (_, i) => [`field_${i}`, i]));
+  const summary = probe.summariseItems([{ wide, list: [{ secret_key: 1 }] }]);
+  assert.equal(summary.fields.wide.fields, undefined);
+  assert.equal(summary.fields.list.fields, undefined);
+  assert.ok(!JSON.stringify(summary).includes("secret_key"));
+});
+
+test("summariseItems counts nested keys past the distinct-key cap", () => {
+  const items = Array.from({ length: 81 }, (_, i) => ({ labels: { [`label_${i}`]: 1 } }));
+  const summary = probe.summariseItems(items);
+  assert.equal(summary.fields.labels.fields, undefined);
+  assert.equal(summary.fields.labels.fields_omitted, 81);
+  assert.ok(!JSON.stringify(summary).includes("label_0"));
+});
+
+test("summariseItems treats a __proto__ key as an ordinary field", () => {
+  const items = [JSON.parse('{"__proto__": {"a": 1}, "ok": true}')];
+  const summary = probe.summariseItems(items);
+  assert.equal(summary.fields.ok.count, 1);
+  assert.equal(JSON.parse(JSON.stringify(summary)).fields.__proto__.count, 1);
+});
+
 test("walkList records the page size when the first page reaches total", async () => {
   const get = getFor(() => ({ body: { items: conversations(2), total: 2, limit: 28 } }));
   const walk = await probe.walkList(get, "/list", { sleep: noSleep });
