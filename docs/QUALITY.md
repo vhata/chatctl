@@ -57,13 +57,15 @@ Read by `docket/CODE_REVIEW_GUIDE.md`, which links this section by its heading, 
 
 Not in use. Every check is fast enough for PR CI; see [DECISIONS.md](DECISIONS.md).
 
-## Branch protection (as checked on 2026-10-14)
+## Branch protection (as configured on 2026-10-15)
 
-- No classic branch protection on `main`.
-- A repository ruleset, "Protect main", targets the default branch but is **disabled**, so none of its rules apply yet. Its rules: block deletion and force pushes, require a pull request with squash as the only merge method and zero approving reviews. It requires no status checks. The repository admin role may bypass it.
+Configured as the repository ruleset "Protect main", active on the default branch. There is no classic branch protection.
+
+- Required checks: `check` and `Queue and PR hygiene`, both from GitHub Actions; up-to-date-with-base: off. The push run on `main` catches the rare bad combination of two green PRs.
+- Pull request required, squash the only allowed merge method, zero approving reviews; independent agent review is recorded in a review comment on each PR.
+- Force pushes and deletion of `main`: blocked.
+- Bypass: the repository admin role, always. That keeps direct-to-main commits of queue entries, plans and specs working (see [docket/CONTRACT.md](../docket/CONTRACT.md)) and lets the owner merge a red PR deliberately. Agents never use the bypass for anything else.
 - Repository merge settings: squash only; squash title from the PR title and message from the PR body; head branches deleted on merge.
-- Approving reviews: none required; independent agent review is recorded in a review comment on each PR.
-- Until the ruleset is enabled, the workflow rules in [AGENTS.md](../AGENTS.md) and [docket/CONTRACT.md](../docket/CONTRACT.md) are what bind agents, and the user is the only one who merges.
 
 ## PR evidence
 
