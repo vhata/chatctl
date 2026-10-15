@@ -50,13 +50,13 @@ uv run chatctl --help
 ## Development
 
 ```bash
-uv run pytest
-uv run ruff check .
-uv run ruff format --check .
-node --test discovery/
+bash scripts/setup.sh   # dependencies and git hooks for this checkout
+bash scripts/check.sh   # format check, lint, pytest and the probe's tests
 ```
 
-See [`AGENTS.md`](AGENTS.md) for the working rules.
+See [`AGENTS.md`](AGENTS.md) for the working rules and
+[`docs/QUALITY.md`](docs/QUALITY.md) for the gates. Work is tracked in
+[`TODO.md`](TODO.md) using [docket](docket/README.md).
 
 ## Credits
 

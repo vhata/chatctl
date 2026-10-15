@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Check-only pre-commit hook: nothing is rewritten, and every check reads
+# the staged content (the index), not the working copy. Ruff format-checks
+# staged Python files and the Python code blocks in staged Markdown files,
+# and lints staged Python files; the queue validator runs on the staged
+# queue files when either is staged. Installed by scripts/setup.sh. See
+# docs/QUALITY.md.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+status=0
+while IFS= read -r -d '' path; do
+  if ! git show ":$path" | uv run --locked --quiet ruff format --check --stdin-filename "$path" - > /dev/null; then
+    echo "pre-commit: $path is not formatted (run bash scripts/format.sh)" >&2
+    status=1
+  fi
+  case "$path" in
+    *.py)
+      if ! git show ":$path" | uv run --locked --quiet ruff check --stdin-filename "$path" -; then
+        status=1
+      fi
+      ;;
+  esac
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.py' '*.md' ':!:docket/')
+
+# The validator reads TODO.md and review/BACKLOG.md relative to the repo
+# root, so the staged copies are written to a scratch directory outside any
+# repository and validated there. A queue file staged for deletion is
+# simply absent.
+if ! git diff --cached --quiet --diff-filter=ACMRD -- TODO.md review/BACKLOG.md; then
+  repo="$PWD"
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  for f in TODO.md review/BACKLOG.md; do
+    if git cat-file -e ":$f" 2> /dev/null; then
+      mkdir -p "$tmp/$(dirname "$f")"
+      git show ":$f" > "$tmp/$f"
+    fi
+  done
+  if [ -e "$tmp/TODO.md" ] || [ -e "$tmp/review/BACKLOG.md" ]; then
+    (cd "$tmp" && env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+      GIT_CEILING_DIRECTORIES="$(dirname "$tmp")" \
+      bash "$repo/docket/scripts/check-queues.sh") || status=1
+  fi
+fi
+
+exit "$status"
