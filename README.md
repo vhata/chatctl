@@ -32,8 +32,9 @@ The design rules that follow from it:
 - The full set of conversations to change is fixed and written to a local
   manifest before the first change.
 - Undo works from that manifest, and only touches what it lists.
-- Conversations that belong to ChatGPT Projects are never archived. When
-  membership is unclear, the conversation is skipped.
+- Conversations that belong to ChatGPT Projects, and conversations with
+  custom GPTs, are never archived. When membership is unclear, the
+  conversation is skipped.
 - Everything runs locally. Conversation metadata is not sent anywhere
   except ChatGPT itself.
 

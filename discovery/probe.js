@@ -11,8 +11,8 @@
 (() => {
   "use strict";
 
-  // Hypothesised endpoints. Compare them with the Network tab and edit here
-  // if the web app uses something different.
+  // Endpoints confirmed on 2026-10-14 (docs/api-findings.md). Compare them
+  // with the Network tab and edit here if the web app changes.
   const ENDPOINTS = {
     session: "/api/auth/session",
     conversations: "/backend-api/conversations",
@@ -31,6 +31,13 @@
   // by IDs (or very wide objects) are reported by key count instead.
   const FIELD_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,29}$/;
   const MAX_LISTED_KEYS = 30;
+  // Nested summaries descend only into objects whose keys look like schema
+  // fields (see isSchemaKey), with at most MAX_NESTED_KEYS keys each, and
+  // only while all items together have at most MAX_NESTED_FIELDS distinct
+  // keys. Past that cap the keys are counted, not listed.
+  const NESTED_SUMMARY_DEPTH = 1;
+  const MAX_NESTED_KEYS = 60;
+  const MAX_NESTED_FIELDS = 80;
   const DAY_MS = 86_400_000;
 
   function makeGet(fetchImpl, token) {
@@ -45,6 +52,23 @@
       }
       return { status: response.status, body };
     };
+  }
+
+  function isFieldName(key) {
+    return FIELD_NAME_RE.test(key) && !/\d{4,}/.test(key);
+  }
+
+  // Stricter than isFieldName, for keys listed once per distinct key across
+  // every item rather than in a few samples: the API's own fields are
+  // lower-case snake_case, while map keys tend to be IDs or user text.
+  function isSchemaKey(key) {
+    return isFieldName(key) && /^[a-z]/.test(key) && !/^[0-9a-f]{8,}$/i.test(key);
+  }
+
+  function isSchemaObject(value) {
+    if (typeOf(value) !== "object") return false;
+    const keys = Object.keys(value);
+    return keys.length <= MAX_NESTED_KEYS && keys.every(isSchemaKey);
   }
 
   function typeOf(value) {
@@ -67,9 +91,7 @@
         return `<array:${value.length}>`;
       case "object": {
         const keys = Object.keys(value);
-        const listable =
-          keys.length <= MAX_LISTED_KEYS &&
-          keys.every((key) => FIELD_NAME_RE.test(key) && !/\d{4,}/.test(key));
+        const listable = keys.length <= MAX_LISTED_KEYS && keys.every(isFieldName);
         return listable ? `<object:${keys.join(",")}>` : `<object:${keys.length} keys>`;
       }
       default:
@@ -156,8 +178,14 @@
     );
   }
 
-  function summariseItems(items) {
-    const fields = {};
+  // Field names, types and safe value distributions for a list of objects.
+  // Booleans get true/false counts. Object-valued fields that pass
+  // isSchemaObject are summarised recursively, depth levels down; other
+  // objects, such as maps keyed by IDs, are not descended into. The objects
+  // have no prototype, so a "__proto__" key is an ordinary field.
+  function summariseItems(items, depth = NESTED_SUMMARY_DEPTH) {
+    const fields = Object.create(null);
+    const nested = Object.create(null);
     for (const item of items) {
       for (const [key, value] of Object.entries(item ?? {})) {
         const field = (fields[key] ??= { count: 0, types: {} });
@@ -171,6 +199,21 @@
           field.values ??= {};
           bump(field.values, String(projectValue(key, value)));
         }
+        if (typeof value === "boolean") {
+          field.booleans ??= {};
+          bump(field.booleans, String(value));
+        }
+        if (depth > 0 && isSchemaObject(value)) {
+          (nested[key] ??= []).push(value);
+        }
+      }
+    }
+    for (const [key, values] of Object.entries(nested)) {
+      const distinct = new Set(values.flatMap((value) => Object.keys(value)));
+      if (distinct.size > MAX_NESTED_FIELDS) {
+        fields[key].fields_omitted = distinct.size;
+      } else {
+        fields[key].fields = summariseItems(values, depth - 1).fields;
       }
     }
     return { item_count: items.length, fields };
@@ -205,8 +248,8 @@
   // Walks a paginated list endpoint. Stops on the first of: a non-200
   // response, a body without an items array, an empty page, a page that adds
   // no unseen IDs (the server ignoring offset), a reported total being
-  // reached, a request that throws, or maxPages. onPage(pageNumber, itemsSoFar) is called after each
-  // page that adds items.
+  // reached, a request that throws, or maxPages. onPage(pageNumber,
+  // itemsSoFar) is called after each page that adds items.
   async function walkList(get, path, options = {}) {
     const {
       firstLimit = FIRST_PAGE_LIMIT,
@@ -270,12 +313,12 @@
       }
       onPage(page + 1, items.length);
       offset += pageItems.length;
+      limit = typeof body.limit === "number" && body.limit > 0 ? body.limit : pageItems.length;
+      effectiveLimit ??= limit;
       if (typeof body.total === "number" && offset >= body.total) {
         stopReason = "reached_total";
         break;
       }
-      limit = typeof body.limit === "number" && body.limit > 0 ? body.limit : pageItems.length;
-      effectiveLimit ??= limit;
     }
 
     return {

@@ -29,22 +29,33 @@ All requests are GETs, made through a single helper:
    page, until an empty page, the reported total, a page with nothing new,
    an error, or 200 pages.
 3. The first page of the same endpoint with `is_archived=true`.
-4. `GET /backend-api/gizmos/snorlax/sidebar`, which is believed to list
-   projects.
+4. `GET /backend-api/gizmos/snorlax/sidebar`, which lists projects.
 
-These paths are educated guesses. If a probe comes back with an error or an
-unexpected shape, open the Network tab, filter by `backend-api`, reload the
-page, find the request the sidebar actually makes, and edit the `ENDPOINTS`
-constant at the top of `probe.js`.
+These paths started as educated guesses; the 2026-10-14 runs confirmed
+them (see [`docs/api-findings.md`](../docs/api-findings.md)). If a probe
+comes back with an error or an unexpected shape, open the Network tab,
+filter by `backend-api`, reload the page, find the request the sidebar
+actually makes, and edit the `ENDPOINTS` constant at the top of
+`probe.js`.
 
 ### What the report contains
 
 - Field names, their types and how often each appears.
+- True/false counts for boolean fields such as `is_archived` and
+  `is_starred`.
 - The encoding of timestamp fields (ISO 8601, epoch seconds or epoch
   milliseconds).
 - Distinct values of fields that look project-related. ID fields (names
   ending in `id`) keep their first 8 characters; any other value is reduced
   to its type and length, since it could be a project name.
+- For object-valued fields, the same field summary one level down (for
+  example the fields of each project's `gizmo` object). This is limited
+  to objects whose keys look like the API's own lower-case field names
+  and that have at most 60 keys; wider objects are not descended into.
+  Past 80 distinct keys across all items, the keys are counted, not
+  listed. The test is a heuristic: it keeps out maps keyed by IDs and
+  capitalised or numbered keys, but a short lower-case key holding user
+  text would get through.
 - Pagination fields and the page size the server actually used.
 - Conversation counts by month of `update_time` and `create_time`, and
   counts older than 30, 60, 90, 180 and 365 days.
@@ -54,31 +65,103 @@ constant at the top of `probe.js`.
 It does not contain titles, full conversation IDs, message content, the
 session's user details or the access token.
 
+With an ad blocker active, the console also shows failed POSTs to
+`/ces/v1/rgstr`. Those are the ChatGPT page's own analytics requests being
+blocked, not the probe's.
+
 ## Network tab checklist
 
 Some questions can only be answered by watching the web app make a change.
-Use a throwaway conversation for this: start a new chat and send "test".
+Use a throwaway conversation: start a new chat and send "test".
 
-In DevTools, open the Network tab, filter by `backend-api` and enable
-"Preserve log". For each request worth recording, note the method, the
-path, the request body, the response status and the top-level response
-keys. Note the names of any unusual request headers (anything mentioning
-CSRF, origin, device or sentinel). Never copy the `Authorization` value.
+Set up DevTools first: open the Network tab, type `backend-api` in the
+filter box, and tick "Preserve log". When a step says to capture a request,
+click it in the list and record:
 
-1. **Archive.** Archive the throwaway chat from its sidebar menu and record
-   the request.
-2. **Visibility.** Check whether the chat disappears from the sidebar
-   straight away and after a reload. Rerun the probe and check whether it
-   now appears in the archived listing.
-3. **Unarchive.** Restore the chat from wherever the UI lists archived chats
-   (currently under Settings) and record the request.
-4. **Projects.** Open a project and record the requests that list its
-   conversations: path, pagination parameters and top-level response keys.
-   Compare with the probe's project-related field values to see whether
-   project conversations also appear in the ordinary conversation list.
-5. **Rate limiting.** Note any 429 responses and any `Retry-After` header.
-6. **Starred or pinned.** If the UI lets you pin or star a conversation, note
-   which field changes.
+- **Headers tab:** the request URL, method and status code, and the *names*
+  of the request headers. Never record the values of `Authorization` or
+  `Cookie`. Note any header whose name mentions CSRF, origin, device,
+  sentinel or account.
+- **Payload tab:** the request body, if there is one.
+- **Response tab:** the shape of the response (its top-level keys).
+
+Screenshots are fine as long as the `Authorization` and `Cookie` lines are
+covered. Do not use "Copy as cURL" or "Copy as fetch" unless you remove the
+token and cookies from the copy, since both include them.
+
+1. **Archive.** Archive the throwaway chat from its menu in the sidebar.
+   Capture the request this makes.
+2. **Visibility.** Note whether the chat leaves the sidebar straight away,
+   and whether it stays gone after a reload.
+3. **Second probe run.** While the chat is still archived, run `probe.js`
+   again. This shows whether the ordinary listing ever contains archived
+   conversations (`is_archived` true/false counts), whether the archived
+   listing picked up the throwaway chat, and the fields of each project's
+   `gizmo` object.
+4. **Unarchive.** Restore the chat from the archived chats list (currently
+   Settings, then Data controls, then Archived chats) and capture the
+   request.
+5. **Star.** If the chat menu offers a star or pin option, use it on the
+   throwaway chat, capture the request, then undo it.
+6. **Projects.** Reload the page and capture the `sidebar?...` request,
+   which loads projects and their recent conversations. Expanding or
+   collapsing a project in the sidebar makes no request.
+7. **Rate limiting.** Note any request that returned 429, and its
+   `Retry-After` header if present.
+
+Delete the throwaway chat afterwards if you like.
+
+## Local access check
+
+This answers whether the token works from outside the browser (question 10
+in `docs/api-findings.md`). It makes one read-only request for a single
+conversation and prints only the HTTP status and two response headers, not
+the response body.
+
+The access token is effectively an account credential until it expires.
+Do not paste it into chats, files or shell history.
+
+1. In the DevTools console on chatgpt.com, copy the token to the
+   clipboard:
+
+   ```js
+   copy((await (await fetch("/api/auth/session")).json()).accessToken)
+   ```
+
+2. In a terminal (bash or zsh), run this line on its own, then paste the
+   token and press Enter. Nothing is echoed and the token does not reach
+   your history.
+
+   ```bash
+   read -rs CHATGPT_TOKEN
+   ```
+
+   Run it by itself rather than pasting it together with the next block:
+   without bracketed paste (macOS's `/bin/bash` 3.2, some terminal and
+   tmux setups), `read` would take the next pasted line as the token, and
+   the token pasted afterwards would run as a command and land in your
+   history.
+
+3. Then run the request. It needs curl 7.84 or later for `%header{...}`.
+
+   ```bash
+   curl -sS -o /dev/null \
+     -w '%{http_code} server=%header{server} cf-mitigated=%header{cf-mitigated}\n' \
+     -H @<(printf 'Authorization: Bearer %s\n' "$CHATGPT_TOKEN") \
+     'https://chatgpt.com/backend-api/conversations?offset=0&limit=1&order=updated'
+   unset CHATGPT_TOKEN
+   pbcopy < /dev/null
+   ```
+
+   The header is passed through a process substitution so the token does
+   not appear in the process list. `pbcopy < /dev/null` clears the macOS
+   clipboard, but not copies kept by a clipboard manager or synced by
+   Universal Clipboard; clear those separately if you use them.
+
+4. Record the output line. `200` means the token works from a local
+   process. `401` means it was rejected. `403` together with
+   `cf-mitigated=challenge` means a bot check blocked the request, which
+   would favour running chatctl's requests from the browser.
 
 Record the answers in [`docs/api-findings.md`](../docs/api-findings.md).
 
@@ -88,4 +171,5 @@ Probe reports, HAR exports and copied requests contain account metadata.
 `.gitignore` excludes `chatctl-probe-*.json` and `*.har`. Keep other copies
 out of the repository too. When writing up findings, replace conversation
 IDs and titles with placeholders such as `<conversation-id>`, and never
-include tokens.
+include tokens. Keep account-specific counts in the local report rather
+than in committed docs.
