@@ -20,7 +20,7 @@ What the structure is now, the boundaries parallel work must respect, and the in
 ## Invariants
 
 - `chatctl/selection.py` reads no clock and does no I/O: the current time is passed in as a timezone-aware `now` and the cutoff as a timezone-aware datetime. Callers in `cli.py` supply `datetime.now(UTC)`.
-- `select_conversations` selects an item only when every check passes, and treats a missing or malformed field as a reason to skip, never as a default. It does not modify its input.
+- `select_conversations` selects an item only when every check passes, and treats a missing or malformed field as a reason to skip, never as a default. The one deliberate exception is a missing `conversation_template_id` ([docs/DECISIONS.md](docs/DECISIONS.md)). A selected conversation's id contains only ASCII letters, digits, `-` and `_`, so it is safe in a request path. It does not modify its input.
 - Every network request in `discovery/probe.js` goes through `makeGet`, which issues GET requests only.
 - The safety rules in [AGENTS.md](AGENTS.md#rules) (dry run without `--apply`, a fixed manifest before the first change, never touching project or custom GPT conversations, no account data in the repository) apply to all code; this file does not restate them.
 
