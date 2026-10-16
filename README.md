@@ -14,7 +14,10 @@ Early. So far there is:
 - a CLI skeleton (`chatctl stats`, `chatctl archive`, `chatctl undo`) that
   parses and validates its options, then exits with "not implemented yet";
 - a read-only [discovery probe](discovery/README.md) for working out how
-  the ChatGPT web app's internal API behaves.
+  the ChatGPT web app's internal API behaves;
+- a read-only proof of concept that pages the conversation listing from
+  a local process through a logged-in browser tab
+  ([transport proof of concept](discovery/README.md#transport-proof-of-concept)).
 
 Nothing in this repository can archive anything yet. Findings about the
 API go in [`docs/api-findings.md`](docs/api-findings.md). The original brief

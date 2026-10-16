@@ -165,6 +165,105 @@ Do not paste it into chats, files or shell history.
 
 Record the answers in [`docs/api-findings.md`](../docs/api-findings.md).
 
+## Transport proof of concept
+
+[`transport_poc.py`](transport_poc.py) tests whether chatctl can reach
+the API from a local process by evaluating JavaScript in an open,
+logged-in chatgpt.com tab over the DevTools protocol, using
+[remaldi](https://github.com/vhata/remaldi) and Vivaldi. It pages the
+whole conversation listing that way, with Python running the loop, and
+prints a summary. It is read-only and writes no files.
+
+### Prerequisites
+
+- `remaldi` on your `PATH` (or pass `--remaldi /path/to/remaldi`). It
+  starts its own background service on first use; there is no need to
+  run `remaldi serve`.
+- Vivaldi running with the debugging port open. Quit Vivaldi completely,
+  then start it with:
+
+  ```bash
+  open -a Vivaldi --args --remote-debugging-port=9222
+  ```
+
+  An ordinary launch, or a relaunch after an update, leaves the port
+  closed. While it is open, any local process can control the browser,
+  so quit and relaunch normally when you are done. `remaldi stop` stops
+  remaldi's service.
+- Exactly one chatgpt.com tab open, logged in. The script finds it in the
+  browser's local target list (`http://127.0.0.1:9222/json/list`, or
+  `$REMALDI_ENDPOINT`). With several chatgpt.com tabs, close the extras or
+  pass `--target` with the tab's DevTools target ID, the `id` field of
+  its entry in that list. remaldi matches the ID exactly; it does not
+  match URLs, and without a target it evaluates in Vivaldi's own UI
+  rather than in a tab.
+
+### Running it
+
+From the repository root:
+
+```bash
+uv run python discovery/transport_poc.py
+```
+
+or, naming the tab:
+
+```bash
+uv run python discovery/transport_poc.py --target <target-id>
+```
+
+`--max-pages N` stops after N pages (default 200).
+
+For each page it runs one `remaldi evaluate --await-promise
+--return-by-value` in the tab. The evaluated script checks that the tab is
+on `https://chatgpt.com`, fetches `/api/auth/session` for the access
+token, then fetches one page of
+`/backend-api/conversations?offset=N&limit=100&order=updated` with it.
+Both are GETs, made through a single helper. The script returns only the
+HTTP status, the response's top-level keys, `total`, `offset`, `limit`,
+the number of items and aggregate counts; the token never leaves the tab.
+
+Requests go one at a time, with half a second between pages. On a 429,
+a 5xx or a timeout the page is retried up to three times, after 2, 4 and
+8 seconds or the server's `Retry-After` if longer (capped at 60). Any
+other error stops the run. The page script abandons its own requests
+after 4 seconds, before remaldi's 5-second limit, so a slow request is
+not left running in the tab.
+
+It stops when a page is empty or when `offset + items >= total`, the
+rule recorded under question 2 in
+[`docs/api-findings.md`](../docs/api-findings.md).
+
+### What to paste back
+
+Progress goes to stderr, one line per page (offset, item count, reported
+total, timing). The summary goes to stdout:
+
+- `stop`: why it stopped (`reached_total` or `empty_page` is a clean
+  finish) and the number of pages.
+- `items` and `last reported total`.
+- `question 2 pattern`: whether every page but the last reported
+  `offset + limit + 1` and the last reported the real count.
+- `offset echoed`: how many pages echoed the requested offset.
+- `top-level keys` of the listing responses.
+- `gizmo_id`: `null`, `project_prefix` (`g-p-`), `other_string`,
+  `other_type` or `missing`.
+- `is_archived`: `true`, `false`, `null`, `other_type` or `missing`.
+- `update_time` and `create_time`: the shape of each timestamp, never
+  its value. `z` ends in `Z`, `offset` has a numeric `+HH:MM` or
+  `-HH:MM` offset, `no_offset` has neither, and `+fraction` marks
+  fractional seconds; otherwise `null`, `missing`, `not_string` or
+  `string_not_iso8601`.
+- `title`: `string`, `null`, `other_type` or `missing`.
+- `id`: `string`, `other` or `missing`.
+- `retries`, `evaluations`, `elapsed` and `error`.
+
+Paste the summary, any progress lines that mention a retry, and any
+error. The counts are specific to your account: keep them out of
+committed files, as with the probe report. The findings recorded in
+`docs/api-findings.md` say what shape the listing has and whether the
+transport works, not how many conversations you have.
+
 ## Privacy
 
 Probe reports, HAR exports and copied requests contain account metadata.
