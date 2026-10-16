@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Local entry point: run the mechanical gates in order, cheapest first, and
 # stop at the first failure, naming the gate. Hooks and CI call the same
-# per-gate scripts. Gate scripts take no arguments and must be executable
-# (chmod +x scripts/*.sh). See docs/QUALITY.md.
-# There is no typecheck gate yet; see TODO.md.
+# per-gate scripts. This script calls each gate with no arguments (some
+# forward extra arguments to their tool when run by hand), and every gate
+# must be executable (chmod +x scripts/*.sh). See docs/QUALITY.md.
 # This script runs the project's gates; hooks and docket/scripts/ci.sh run
 # the vendored validators.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-for gate in fmt-check lint test; do
+for gate in fmt-check lint typecheck test; do
   [ -x "scripts/$gate.sh" ] || { echo "check: scripts/$gate.sh missing or not executable" >&2; exit 1; }
   echo "==> $gate"
   if ! "scripts/$gate.sh"; then

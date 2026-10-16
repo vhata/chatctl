@@ -1,3 +1,4 @@
+import argparse
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -7,11 +8,11 @@ from chatctl import __version__
 from chatctl.cli import build_parser, main
 
 
-def parse(*argv):
+def parse(*argv: str) -> argparse.Namespace:
     return build_parser().parse_args(list(argv))
 
 
-def usage_error(capsys, *argv):
+def usage_error(capsys: pytest.CaptureFixture[str], *argv: str) -> str:
     with pytest.raises(SystemExit) as exc_info:
         parse(*argv)
     assert exc_info.value.code == 2

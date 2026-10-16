@@ -52,7 +52,7 @@ uv run chatctl --help
 
 ```bash
 bash scripts/setup.sh   # dependencies and git hooks for this checkout
-bash scripts/check.sh   # format check, lint, pytest and the probe's tests
+bash scripts/check.sh   # format check, lint, type check, pytest and the probe's tests
 ```
 
 See [`AGENTS.md`](AGENTS.md) for the working rules and
