@@ -73,7 +73,7 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 - [CLI] `archive-dry-run` — **Make `chatctl archive` without `--apply` list the selection and its summary against the live listing.** This is the brief's first workflow, and it changes nothing.
   - Source: triage, 2026-10-15
-  - Depends on: `conversation-client`, `select-conversations`
+  - Depends on: `conversation-client`
 
 - [CLI] `archive-apply` — **Make `chatctl archive --apply` write the manifest, then archive exactly the conversations in it, recording each result.** This is the mutation the tool exists for.
   - Source: triage, 2026-10-15
