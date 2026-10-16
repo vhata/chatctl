@@ -19,6 +19,7 @@ writes no files. Standard library only.
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -35,11 +36,18 @@ MAX_ATTEMPTS = 4
 BACKOFF_SECONDS = (2.0, 4.0, 8.0)
 MAX_RETRY_AFTER_SECONDS = 60.0
 # remaldi gives each DevTools request five seconds and reports a slower one as
-# unknown_outcome. The page aborts its own requests first, so a slow request is
-# never left running in the tab while the next one starts.
+# unknown_outcome. The page aborts its own requests after four, so a slow page
+# normally ends before remaldi gives up on it.
 PAGE_TIMEOUT_MS = 4000
-# remaldi's own limits: eight seconds to start its service, twelve per
-# operation. This only catches a hung process.
+# An unknown_outcome (remaldi's five-second DevTools deadline, its service's
+# twelve-second operation deadline or its client's fifteen-second read
+# timeout) can mean the evaluation started late and is still running. Waiting
+# longer than the page's own timeout before a retry keeps two GETs from
+# overlapping, unless the browser delays starting the script, for example in
+# a throttled background tab.
+UNKNOWN_OUTCOME_GRACE_SECONDS = PAGE_TIMEOUT_MS / 1000 + 1
+# remaldi's client allows eight seconds to start its service and fifteen to
+# read a response. This only catches a hung process.
 RUNNER_TIMEOUT_SECONDS = 30.0
 CHATGPT_ORIGIN = "https://chatgpt.com"
 DEFAULT_DEVTOOLS_ENDPOINT = "http://127.0.0.1:9222"
@@ -48,11 +56,23 @@ DEFAULT_DEVTOOLS_ENDPOINT = "http://127.0.0.1:9222"
 # update_time and create_time count timestamp shapes: z, offset or no_offset,
 # each with "+fraction" when there are fractional seconds, or null, missing,
 # not_string or string_not_iso8601.
-COUNT_GROUPS = ("gizmo_id", "is_archived", "update_time", "create_time", "title", "id")
+# gizmo_and_template says whether gizmo_id and conversation_template_id are
+# non-null on the same items: both, gizmo_id_only, template_id_only, neither.
+COUNT_GROUPS = (
+    "gizmo_id",
+    "gizmo_and_template",
+    "is_archived",
+    "update_time",
+    "create_time",
+    "title",
+    "id",
+)
 
 # remaldi error codes after which the same GET may be sent again: the request
 # timed out or its response was lost.
 RETRYABLE_REMALDI_CODES = frozenset({"unknown_outcome"})
+# Failures after which the page script may still be running in the tab.
+UNKNOWN_OUTCOME_KINDS = frozenset({"remaldi_unknown_outcome", "runner_timeout"})
 
 PAGE_SCRIPT = """(async () => {
   "use strict";
@@ -115,6 +135,15 @@ PAGE_SCRIPT = """(async () => {
     return value.startsWith("g-p-") ? "project_prefix" : "other_string";
   }
 
+  function gizmoAndTemplate(item) {
+    const gizmo = Object.hasOwn(item, "gizmo_id") && item.gizmo_id !== null;
+    const template =
+      Object.hasOwn(item, "conversation_template_id") && item.conversation_template_id !== null;
+    if (gizmo && template) return "both";
+    if (gizmo) return "gizmo_id_only";
+    return template ? "template_id_only" : "neither";
+  }
+
   function archivedKind(item) {
     if (!Object.hasOwn(item, "is_archived")) return "missing";
     const value = item.is_archived;
@@ -153,6 +182,7 @@ PAGE_SCRIPT = """(async () => {
     const items = Array.isArray(body.items) ? body.items : null;
     const counts = {
       gizmo_id: {},
+      gizmo_and_template: {},
       is_archived: {},
       update_time: {},
       create_time: {},
@@ -165,6 +195,7 @@ PAGE_SCRIPT = """(async () => {
         continue;
       }
       bump(counts.gizmo_id, gizmoKind(item));
+      bump(counts.gizmo_and_template, gizmoAndTemplate(item));
       bump(counts.is_archived, archivedKind(item));
       bump(counts.update_time, timeShape(item, "update_time"));
       bump(counts.create_time, timeShape(item, "create_time"));
@@ -419,6 +450,8 @@ def parse_remaldi_output(
 def retry_delay(failure: Failure, retry: int) -> float:
     """Seconds to wait before retry number `retry` (1-based)."""
     delay = BACKOFF_SECONDS[min(retry, len(BACKOFF_SECONDS)) - 1]
+    if failure.kind in UNKNOWN_OUTCOME_KINDS:
+        delay = max(delay, UNKNOWN_OUTCOME_GRACE_SECONDS)
     if failure.retry_after is not None:
         delay = max(delay, min(failure.retry_after, MAX_RETRY_AFTER_SECONDS))
     return delay
@@ -437,6 +470,19 @@ def should_stop(page: Page) -> str | None:
     if page.offset + page.items >= page.total:
         return "reached_total"
     return None
+
+
+def offset_mismatch(page: Page) -> Failure | None:
+    """A response offset that differs from the requested one means the
+    server is not paging as recorded; carrying on could fetch the same items
+    over and over until max_pages."""
+    if page.response_offset is None or page.response_offset == page.offset:
+        return None
+    return Failure(
+        "offset_mismatch",
+        f"requested offset {page.offset}, response offset {page.response_offset}",
+        False,
+    )
 
 
 def total_pattern(page: Page) -> str:
@@ -510,6 +556,7 @@ def walk_listing(
         for attempt in range(1, MAX_ATTEMPTS + 1):
             if attempt > 1:
                 assert isinstance(outcome, Failure)
+                walk.retries[outcome.kind] = walk.retries.get(outcome.kind, 0) + 1
                 delay = retry_delay(outcome, attempt - 1)
                 progress(
                     f"  retrying offset {offset} in {delay:g} s after {outcome.detail}"
@@ -526,11 +573,18 @@ def walk_listing(
                 outcome = Failure(
                     "runner_timeout", "remaldi did not finish in time", True
                 )
+            except OSError as exc:
+                outcome = Failure(
+                    "runner_error",
+                    f"could not run {remaldi} ({exc.__class__.__name__})",
+                    False,
+                )
             call_seconds = clock() - call_started
             walk.requests += 1
+            if isinstance(outcome, Page):
+                outcome = offset_mismatch(outcome) or outcome
             if isinstance(outcome, Page) or not outcome.retryable:
                 break
-            walk.retries[outcome.kind] = walk.retries.get(outcome.kind, 0) + 1
         assert outcome is not None
         if isinstance(outcome, Failure):
             walk.failure = outcome
@@ -691,6 +745,15 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def find_remaldi(name: str) -> str:
+    path = shutil.which(name)
+    if path is None:
+        raise SystemExit(
+            f"error: {name} not found; install remaldi or pass --remaldi PATH"
+        )
+    return path
+
+
 def resolve_target(explicit: str | None) -> str:
     if explicit:
         return explicit
@@ -712,6 +775,7 @@ def resolve_target(explicit: str | None) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    remaldi = find_remaldi(args.remaldi)
     target = resolve_target(args.target)
     print(
         f"paging the listing through remaldi, target {target} (read-only)",
@@ -719,7 +783,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     walk = walk_listing(
         run_remaldi,
-        args.remaldi,
+        remaldi,
         target,
         max_pages=args.max_pages,
         progress=lambda line: print(line, file=sys.stderr, flush=True),
