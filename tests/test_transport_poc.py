@@ -10,7 +10,9 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -25,8 +27,10 @@ TOKEN = "SECRET-TOKEN-must-not-leave-the-page"
 TARGET = "TARGET-ID"
 
 
-def page_value(offset, items, total, **extra):
-    value = {
+def page_value(
+    offset: int, items: int | None, total: int | None, **extra: object
+) -> dict[str, Any]:
+    value: dict[str, Any] = {
         "ok": True,
         "session_status": 200,
         "status": 200,
@@ -38,6 +42,7 @@ def page_value(offset, items, total, **extra):
         "items_length": items,
         "counts": {
             "gizmo_id": {"null": items},
+            "gizmo_and_template": {"neither": items},
             "is_archived": {"false": items},
             "update_time": {"z+fraction": items},
             "create_time": {"z+fraction": items},
@@ -49,27 +54,34 @@ def page_value(offset, items, total, **extra):
     return value
 
 
-def evaluated(value):
+def evaluated(value: object) -> str:
     return json.dumps({"result": {"type": "object", "value": value}})
 
 
-def completed(stdout="", stderr="", returncode=0):
+def completed(
+    stdout: str = "", stderr: str = "", returncode: int = 0
+) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess([], returncode, stdout, stderr)
 
 
-def offset_of(command):
-    return int(re.search(r"const OFFSET = (\d+);", command[-1]).group(1))
+def offset_of(command: Sequence[str]) -> int:
+    match = re.search(r"const OFFSET = (\d+);", command[-1])
+    assert match is not None
+    return int(match.group(1))
+
+
+Response = subprocess.CompletedProcess[str] | BaseException
 
 
 class FakeRemaldi:
     """Stands in for the remaldi subprocess. `script` maps a requested offset
     to a list of responses, consumed one per call."""
 
-    def __init__(self, script):
+    def __init__(self, script: Mapping[int, Sequence[Response]]) -> None:
         self.script = {offset: list(responses) for offset, responses in script.items()}
-        self.commands = []
+        self.commands: list[list[str]] = []
 
-    def __call__(self, command):
+    def __call__(self, command: Sequence[str]) -> subprocess.CompletedProcess[str]:
         self.commands.append(list(command))
         response = self.script[offset_of(command)].pop(0)
         if isinstance(response, BaseException):
@@ -78,20 +90,20 @@ class FakeRemaldi:
 
 
 class FakeClock:
-    def __init__(self):
+    def __init__(self) -> None:
         self.now = 0.0
-        self.sleeps = []
+        self.sleeps: list[float] = []
 
-    def __call__(self):
+    def __call__(self) -> float:
         self.now += 0.25
         return self.now
 
-    def sleep(self, seconds):
+    def sleep(self, seconds: float) -> None:
         self.sleeps.append(seconds)
         self.now += seconds
 
 
-def walk(fake, **kwargs):
+def walk(fake: FakeRemaldi, **kwargs: Any) -> tuple[Any, FakeClock]:
     clock = FakeClock()
     result = poc.walk_listing(
         fake, "remaldi", TARGET, sleep=clock.sleep, clock=clock, **kwargs
@@ -155,6 +167,7 @@ def test_parses_a_successful_page():
         items=100,
         counts={
             "gizmo_id": {"null": 100},
+            "gizmo_and_template": {"neither": 100},
             "is_archived": {"false": 100},
             "update_time": {"z+fraction": 100},
             "create_time": {"z+fraction": 100},
@@ -269,7 +282,7 @@ def test_a_listing_without_items_is_fatal():
 # Stop rule and question 2
 
 
-def make_page(offset, items, total, limit=100):
+def make_page(offset: int, items: int, total: int | None, limit: int = 100) -> Any:
     return poc.Page(offset, 200, None, 4, total, offset, limit, items, {})
 
 
@@ -390,6 +403,7 @@ def test_gives_up_after_bounded_retries():
     assert result.stop_reason == "failed"
     assert result.failure.kind == "http_503"
     assert result.requests == poc.MAX_ATTEMPTS
+    assert result.retries == {"http_503": poc.MAX_ATTEMPTS - 1}
     assert clock.sleeps == list(poc.BACKOFF_SECONDS)
 
 
@@ -417,9 +431,50 @@ def test_a_hung_remaldi_is_retried():
             ]
         }
     )
-    result, _ = walk(fake)
+    result, clock = walk(fake)
     assert result.stop_reason == "reached_total"
     assert result.retries == {"runner_timeout": 1}
+    assert clock.sleeps == [poc.UNKNOWN_OUTCOME_GRACE_SECONDS]
+
+
+def test_an_unknown_outcome_waits_out_the_page_timeout_before_retrying():
+    unknown = poc.Failure("remaldi_unknown_outcome", "", True)
+    grace = poc.PAGE_TIMEOUT_MS / 1000 + 1
+    assert poc.retry_delay(unknown, 1) == grace
+    assert poc.retry_delay(unknown, 3) == max(grace, poc.BACKOFF_SECONDS[2])
+
+
+def test_a_missing_remaldi_stops_the_walk():
+    fake = FakeRemaldi({0: [FileNotFoundError("remaldi")]})
+    result, _ = walk(fake)
+    assert result.stop_reason == "failed"
+    assert result.failure.kind == "runner_error"
+    assert result.requests == 1
+
+
+def test_stops_when_the_server_ignores_the_offset():
+    fake = FakeRemaldi(
+        {
+            0: [completed(evaluated(page_value(0, 100, 101)))],
+            100: [completed(evaluated(page_value(0, 100, 101)))],
+        }
+    )
+    result, _ = walk(fake)
+    assert result.stop_reason == "failed"
+    assert result.failure.kind == "offset_mismatch"
+    assert "requested offset 100, response offset 0" in result.failure.detail
+    assert result.requests == 2
+    assert len(result.pages) == 1
+    text = "\n".join(poc.format_summary(result, TARGET))
+    assert "error: offset_mismatch" in text
+
+
+def test_a_missing_response_offset_is_not_a_mismatch():
+    value = page_value(0, 3, 3)
+    value["offset"] = None
+    fake = FakeRemaldi({0: [completed(evaluated(value))]})
+    result, _ = walk(fake)
+    assert result.stop_reason == "reached_total"
 
 
 def test_stops_at_max_pages():
@@ -449,6 +504,7 @@ def test_summary_reports_shape_and_counts_only():
     assert "offset echoed: 2 of 2 pages" in text
     assert "top-level keys: items,limit,offset,total" in text
     assert "gizmo_id: null 107" in text
+    assert "gizmo_and_template: neither 107" in text
     assert "update_time: z+fraction 107" in text
     assert "create_time: z+fraction 107" in text
     assert "title: string 107" in text
@@ -522,7 +578,12 @@ globalThis.fetch = (path, init = {}) => {
 """
 
 
-def run_page_script(routes, origin="https://chatgpt.com", offset=0, timeout_ms=4000):
+def run_page_script(
+    routes: list[dict[str, Any]],
+    origin: str = "https://chatgpt.com",
+    offset: int = 0,
+    timeout_ms: int = 4000,
+) -> Any:
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is not installed")
@@ -553,7 +614,12 @@ SESSION = {
 }
 
 
-def listing(items, total, status=200, headers=None):
+def listing(
+    items: list[dict[str, Any]],
+    total: int,
+    status: int = 200,
+    headers: dict[str, str] | None = None,
+) -> dict[str, Any]:
     return {
         "prefix": "/backend-api/conversations",
         "status": status,
@@ -562,7 +628,7 @@ def listing(items, total, status=200, headers=None):
     }
 
 
-ITEMS = [
+ITEMS: list[dict[str, Any]] = [
     {
         "id": "conv-1",
         "title": "TITLE-ONE",
@@ -576,6 +642,7 @@ ITEMS = [
         "title": None,
         "gizmo_id": "g-p-abc",
         "is_archived": False,
+        "conversation_template_id": "g-p-abc",
         "update_time": "2026-01-02T00:00:00.5Z",
         "create_time": "2025-12-02T10:00:00",
     },
@@ -583,15 +650,22 @@ ITEMS = [
         "id": "conv-3",
         "title": "TITLE-THREE",
         "gizmo_id": "g-xyz",
+        "conversation_template_id": None,
         "is_archived": True,
         "create_time": None,
     },
-    {"id": 4, "update_time": 1700000000, "create_time": "TIME-TEXT"},
+    {
+        "id": 4,
+        "conversation_template_id": "tmpl-x",
+        "update_time": 1700000000,
+        "create_time": "TIME-TEXT",
+    },
     {
         "id": "conv-5",
         "title": "TITLE-FIVE",
         "gizmo_id": None,
         "is_archived": False,
+        "conversation_template_id": None,
         "update_time": "2026-01-03T00:00:00-05:00",
         "create_time": "2025-12-03T10:00:00.25",
     },
@@ -617,6 +691,12 @@ def test_page_script_returns_counts_and_never_content():
                 "project_prefix": 1,
                 "other_string": 1,
                 "missing": 1,
+            },
+            "gizmo_and_template": {
+                "neither": 2,
+                "both": 1,
+                "gizmo_id_only": 1,
+                "template_id_only": 1,
             },
             "is_archived": {"false": 3, "true": 1, "missing": 1},
             "update_time": {
@@ -645,6 +725,7 @@ def test_page_script_returns_counts_and_never_content():
         "conv-",
         "g-p-abc",
         "TIME-TEXT",
+        "tmpl-x",
         "2025",
     ):
         assert secret not in serialised
@@ -716,6 +797,7 @@ def test_page_script_rejects_a_non_object_listing():
 def test_main_prints_the_summary_and_exits_zero(monkeypatch, capsys):
     fake = FakeRemaldi({0: [completed(evaluated(page_value(0, 3, 3)))]})
     monkeypatch.setattr(poc, "run_remaldi", fake)
+    monkeypatch.setattr(poc, "find_remaldi", lambda name: name)
     assert poc.main(["--target", TARGET, "--remaldi", "/opt/remaldi"]) == 0
     out = capsys.readouterr().out
     assert "stop: reached_total after 1 pages" in out
@@ -726,7 +808,14 @@ def test_main_exits_non_zero_when_a_page_fails(monkeypatch):
     stderr = json.dumps({"error": {"code": "target_unavailable", "message": "m"}})
     fake = FakeRemaldi({0: [completed(stderr=stderr, returncode=1)]})
     monkeypatch.setattr(poc, "run_remaldi", fake)
+    monkeypatch.setattr(poc, "find_remaldi", lambda name: name)
     assert poc.main(["--target", TARGET]) == 1
+
+
+def test_main_reports_a_missing_remaldi(monkeypatch):
+    monkeypatch.setattr(poc.shutil, "which", lambda _name: None)
+    with pytest.raises(SystemExit, match="error: nope not found"):
+        poc.main(["--target", TARGET, "--remaldi", "nope"])
 
 
 def test_target_defaults_to_the_only_chatgpt_tab(monkeypatch):

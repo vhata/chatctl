@@ -197,6 +197,10 @@ prints a summary. It is read-only and writes no files.
   its entry in that list. remaldi matches the ID exactly; it does not
   match URLs, and without a target it evaluates in Vivaldi's own UI
   rather than in a tab.
+- Keep that tab in the foreground while the script runs, and make sure
+  it is not hibernated. The browser throttles timers in background tabs
+  and does not run scripts in hibernated ones, which would show up as
+  timeouts.
 
 ### Running it
 
@@ -227,12 +231,16 @@ Requests go one at a time, with half a second between pages. On a 429,
 a 5xx or a timeout the page is retried up to three times, after 2, 4 and
 8 seconds or the server's `Retry-After` if longer (capped at 60). Any
 other error stops the run. The page script abandons its own requests
-after 4 seconds, before remaldi's 5-second limit, so a slow request is
-not left running in the tab.
+after 4 seconds, before remaldi's 5-second limit. When remaldi cannot
+say whether an evaluation ran, the retry waits at least 5 seconds, so
+that a late-starting evaluation has finished first; a tab that delays
+running the script could still let two requests overlap briefly.
 
 It stops when a page is empty or when `offset + items >= total`, the
 rule recorded under question 2 in
-[`docs/api-findings.md`](../docs/api-findings.md).
+[`docs/api-findings.md`](../docs/api-findings.md). It also stops, as an
+error, if a response's `offset` differs from the one requested, since
+that would mean the server is not paging as recorded.
 
 ### What to paste back
 
@@ -248,6 +256,9 @@ total, timing). The summary goes to stdout:
 - `top-level keys` of the listing responses.
 - `gizmo_id`: `null`, `project_prefix` (`g-p-`), `other_string`,
   `other_type` or `missing`.
+- `gizmo_and_template`: whether `gizmo_id` and `conversation_template_id`
+  are non-null on the same items: `both`, `gizmo_id_only`,
+  `template_id_only` or `neither`.
 - `is_archived`: `true`, `false`, `null`, `other_type` or `missing`.
 - `update_time` and `create_time`: the shape of each timestamp, never
   its value. `z` ends in `Z`, `offset` has a numeric `+HH:MM` or
