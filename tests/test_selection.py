@@ -1,5 +1,6 @@
 import copy
 import re
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -131,17 +132,18 @@ RECENT = "2026-09-01T10:00:00.000000Z"
 MISSING = object()
 
 
-def item(n=1, **fields):
+def item(n: int = 1, **fields: object) -> dict[str, object]:
     """A listing item shaped like a /backend-api/conversations item.
 
     Pass ``field=MISSING`` to drop a field.
     """
-    base = {
+    base: dict[str, object] = {
         "id": f"conv-{n:04d}",
         "title": "Placeholder title",
         "create_time": "2025-12-01T09:00:00.000000Z",
         "update_time": OLD,
         "gizmo_id": None,
+        "conversation_template_id": None,
         "is_archived": False,
         "is_starred": None,
     }
@@ -149,11 +151,16 @@ def item(n=1, **fields):
     return {key: value for key, value in base.items() if value is not MISSING}
 
 
-def select(items, *, cutoff=CUTOFF, exclude=()):
+def select(
+    items: Iterable[object],
+    *,
+    cutoff: datetime = CUTOFF,
+    exclude: Iterable[re.Pattern[str]] = (),
+) -> Selection:
     return select_conversations(items, cutoff=cutoff, exclude=exclude)
 
 
-def reasons(result):
+def reasons(result: Selection) -> list[SkipReason]:
     return [skip.reason for skip in result.skipped]
 
 
@@ -194,12 +201,37 @@ def test_rejects_a_naive_cutoff():
         (item(1, id=None), SkipReason.BAD_ID),
         (item(1, id=""), SkipReason.BAD_ID),
         (item(1, id=1), SkipReason.BAD_ID),
+        # Ids go into request paths and the manifest: only [A-Za-z0-9_-]+.
+        (item(1, id="../conversations"), SkipReason.BAD_ID),
+        (item(1, id="a/../b"), SkipReason.BAD_ID),
+        (item(1, id=" "), SkipReason.BAD_ID),
+        (item(1, id=" conv-0001"), SkipReason.BAD_ID),
+        (item(1, id="x?y=1"), SkipReason.BAD_ID),
+        (item(1, id="conv-0001#frag"), SkipReason.BAD_ID),
+        (item(1, id="conv-0001%2F"), SkipReason.BAD_ID),
+        (item(1, id="conv.0001"), SkipReason.BAD_ID),
+        (item(1, id="conv-1\x00"), SkipReason.BAD_ID),
+        (item(1, id="conv-1\n"), SkipReason.BAD_ID),
+        (item(1, id="conv-é"), SkipReason.BAD_ID),
+        (item(1, id="conv-١"), SkipReason.BAD_ID),  # Arabic-Indic digit
         (item(1, gizmo_id=MISSING), SkipReason.GIZMO_ID_MISSING),
         (item(1, gizmo_id="g-p-placeholder"), SkipReason.PROJECT_OR_CUSTOM_GPT),
         (item(1, gizmo_id="g-placeholder"), SkipReason.PROJECT_OR_CUSTOM_GPT),
         (item(1, gizmo_id=""), SkipReason.PROJECT_OR_CUSTOM_GPT),
         (item(1, gizmo_id=False), SkipReason.PROJECT_OR_CUSTOM_GPT),
         (item(1, gizmo_id={}), SkipReason.PROJECT_OR_CUSTOM_GPT),
+        (
+            item(1, conversation_template_id="g-p-placeholder"),
+            SkipReason.CONVERSATION_TEMPLATE_ID_SET,
+        ),
+        (
+            item(1, conversation_template_id=""),
+            SkipReason.CONVERSATION_TEMPLATE_ID_SET,
+        ),
+        (
+            item(1, conversation_template_id=False),
+            SkipReason.CONVERSATION_TEMPLATE_ID_SET,
+        ),
         (item(1, is_archived=True), SkipReason.ALREADY_ARCHIVED),
         (item(1, is_archived=MISSING), SkipReason.ARCHIVED_STATE_UNKNOWN),
         (item(1, is_archived=None), SkipReason.ARCHIVED_STATE_UNKNOWN),
@@ -235,12 +267,39 @@ def test_excluded_is_a_skip_reason():
 
 
 def test_skipped_records_id_and_title_when_usable():
-    result = select([item(1, gizmo_id="g-p-placeholder"), item(2, title=42), None])
-    assert [(s.id, s.title) for s in result.skipped] == [
+    items = [
+        item(1, gizmo_id="g-p-placeholder"),
+        item(2, title=42),
+        None,
+        item(4, id="../conversations"),
+    ]
+    assert [(s.id, s.title) for s in select(items).skipped] == [
         ("conv-0001", "Placeholder title"),
         ("conv-0002", None),
         (None, None),
+        (None, "Placeholder title"),
     ]
+
+
+@pytest.mark.parametrize(
+    "conversation_id",
+    [
+        "0f3c2a9e-1b2d-4c5e-8f7a-000000000001",
+        "CONV_0001",
+        "conv-0001",
+        "x",
+    ],
+)
+def test_ids_in_the_safe_character_set_are_accepted(conversation_id):
+    assert [c.id for c in select([item(1, id=conversation_id)]).selected] == [
+        conversation_id
+    ]
+
+
+def test_a_missing_conversation_template_id_is_not_doubt():
+    # Only gizmo_id is required to be present; see SkipReason.
+    result = select([item(1, conversation_template_id=MISSING)])
+    assert [c.id for c in result.selected] == ["conv-0001"]
 
 
 @pytest.mark.parametrize(
@@ -333,6 +392,24 @@ def test_no_exclude_patterns_excludes_nothing():
             item(1, gizmo_id="g-p-placeholder", is_archived=True, update_time=RECENT),
             SkipReason.PROJECT_OR_CUSTOM_GPT,
         ),
+        # A set gizmo_id is reported as such, not as the template id.
+        (
+            item(
+                1,
+                gizmo_id="g-p-placeholder",
+                conversation_template_id="g-p-placeholder",
+            ),
+            SkipReason.PROJECT_OR_CUSTOM_GPT,
+        ),
+        (
+            item(
+                1,
+                conversation_template_id="g-p-placeholder",
+                is_archived=None,
+                update_time=RECENT,
+            ),
+            SkipReason.CONVERSATION_TEMPLATE_ID_SET,
+        ),
         (
             item(1, is_archived=None, update_time="bad"),
             SkipReason.ARCHIVED_STATE_UNKNOWN,
@@ -374,6 +451,7 @@ def test_a_skipped_first_copy_keeps_its_own_reason():
     [
         item(1, gizmo_id="g-p-placeholder"),
         item(1, gizmo_id=MISSING),
+        item(1, conversation_template_id="g-p-placeholder"),
         item(1, is_archived=True),
         item(1, is_archived=None),
         item(1, update_time=RECENT),
@@ -434,7 +512,8 @@ def test_results_are_immutable():
     result = select([item(1), item(2, update_time=RECENT)])
     assert isinstance(result.selected, tuple)
     assert isinstance(result.skipped, tuple)
+    # setattr, because the type checker rightly rejects a plain assignment.
     with pytest.raises(AttributeError):
-        result.selected[0].id = "conv-9999"
+        setattr(result.selected[0], "id", "conv-9999")
     with pytest.raises(AttributeError):
-        result.skipped[0].reason = SkipReason.EXCLUDED
+        setattr(result.skipped[0], "reason", SkipReason.EXCLUDED)

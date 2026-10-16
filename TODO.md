@@ -95,10 +95,6 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 ### P1 High
 
-- [CLI] `select-conversations` — **Add a pure selection function that takes listing items and a cutoff and returns the conversations to archive and the ones skipped, each with a reason.** It is the core of the safety rules and depends on no transport: only fields already recorded in `docs/api-findings.md`.
-  - Source: triage, 2026-10-15
-  - Starting point: `chatctl/selection.py`. Select only items whose `gizmo_id` is present and null, `is_archived` is false, and `update_time` (ISO 8601) is strictly before the cutoff; skip anything whose fields are missing or unparseable; apply `--exclude` patterns to titles. Tests use placeholder titles and IDs.
-
 ### P2 Normal
 
 - [CLI] `archive-manifest-format` — **Design and implement the archive manifest: what it records, where it is written, and how a partly applied run is resumed or undone.** It is the interface between `archive` and `undo` and must land before either depends on it (ARCHITECTURE.md).

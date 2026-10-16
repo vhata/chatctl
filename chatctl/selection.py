@@ -18,6 +18,10 @@ from enum import StrEnum
 _UNIT_DAYS = {"d": 1, "w": 7, "m": 30, "y": 365}
 _DURATION_RE = re.compile(r"([0-9]+)([dwmy])")
 _DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+# Conversation ids end up in request paths and the manifest, so only a
+# conservative character set is accepted. The UUID-like format seen in the
+# web UI is not recorded in docs/api-findings.md and is not required.
+_ID_RE = re.compile(r"[A-Za-z0-9_-]+", re.ASCII)
 
 
 def parse_duration(text: str) -> timedelta:
@@ -81,13 +85,22 @@ class SkipReason(StrEnum):
     NOT_AN_OBJECT = "not-an-object"
     """The item is not a JSON object."""
     BAD_ID = "bad-id"
-    """``id`` is missing, not a string, or empty."""
+    """``id`` is missing, not a string, or not made only of ASCII letters,
+    digits, ``-`` and ``_``."""
     DUPLICATE_ID = "duplicate-id"
     """An earlier item in the listing has the same ``id``."""
     GIZMO_ID_MISSING = "gizmo-id-missing"
     """``gizmo_id`` is absent, so project membership is unknown."""
     PROJECT_OR_CUSTOM_GPT = "project-or-custom-gpt"
     """``gizmo_id`` is present and not null."""
+    CONVERSATION_TEMPLATE_ID_SET = "conversation-template-id-set"
+    """``conversation_template_id`` is present and not null.
+
+    docs/api-findings.md (question 5) records it as non-null on as many
+    items as ``gizmo_id`` without recording whether they are the same
+    items, so a set value is doubt about project membership. A missing
+    key is not: only ``gizmo_id`` is required to be present.
+    """
     ARCHIVED_STATE_UNKNOWN = "archived-state-unknown"
     """``is_archived`` is missing or not a boolean."""
     ALREADY_ARCHIVED = "already-archived"
@@ -150,19 +163,24 @@ def select_conversations(
     most safety-relevant to the least, so a project conversation is
     reported as one even when it is also too recent:
 
-    1. ``NOT_AN_OBJECT``, ``BAD_ID``: the item is a mapping with a
-       non-empty string ``id``.
+    1. ``NOT_AN_OBJECT``, ``BAD_ID``: the item is a mapping whose ``id``
+       is a string of ASCII letters, digits, ``-`` and ``_``. Ids go into
+       request paths and the manifest, so anything else (``/``, ``.``,
+       ``?``, whitespace, control characters) is refused rather than
+       escaped. The id's format is not otherwise checked.
     2. ``DUPLICATE_ID``: no earlier item had this ``id``.
     3. ``GIZMO_ID_MISSING``, ``PROJECT_OR_CUSTOM_GPT``: ``gizmo_id`` is
        present and null. A missing key is doubt, and doubt means skip.
-    4. ``ARCHIVED_STATE_UNKNOWN``, ``ALREADY_ARCHIVED``: ``is_archived`` is
+    4. ``CONVERSATION_TEMPLATE_ID_SET``: ``conversation_template_id`` is
+       missing or null (see ``SkipReason``).
+    5. ``ARCHIVED_STATE_UNKNOWN``, ``ALREADY_ARCHIVED``: ``is_archived`` is
        exactly ``False``.
-    5. ``BAD_UPDATE_TIME``: ``update_time`` is an ISO 8601 string with a
+    6. ``BAD_UPDATE_TIME``: ``update_time`` is an ISO 8601 string with a
        UTC offset. A timestamp without one is skipped rather than given a
        guessed zone, since the API's format is recorded only as ISO 8601.
-    6. ``BAD_TITLE``: ``title`` is present and is a string or null.
-    7. ``TOO_RECENT``: ``update_time`` is strictly before ``cutoff``.
-    8. ``EXCLUDED``: no pattern in ``exclude`` matches anywhere in the
+    7. ``BAD_TITLE``: ``title`` is present and is a string or null.
+    8. ``TOO_RECENT``: ``update_time`` is strictly before ``cutoff``.
+    9. ``EXCLUDED``: no pattern in ``exclude`` matches anywhere in the
        title (``re.search``). Patterns are used as compiled, so the CLI's
        ``re.IGNORECASE`` makes them case-insensitive. A null title has
        nothing to match and is not excluded. Age is checked first so that
@@ -219,7 +237,7 @@ def _check(
     raw_title = item.get("title")
     title = raw_title if isinstance(raw_title, str) else None
     conversation_id = item.get("id")
-    if not isinstance(conversation_id, str) or not conversation_id:
+    if not isinstance(conversation_id, str) or not _ID_RE.fullmatch(conversation_id):
         return Skipped(position, None, title, SkipReason.BAD_ID)
 
     def skip(reason: SkipReason) -> Skipped:
@@ -229,6 +247,8 @@ def _check(
         return skip(SkipReason.GIZMO_ID_MISSING)
     if item["gizmo_id"] is not None:
         return skip(SkipReason.PROJECT_OR_CUSTOM_GPT)
+    if item.get("conversation_template_id") is not None:
+        return skip(SkipReason.CONVERSATION_TEMPLATE_ID_SET)
     is_archived = item.get("is_archived")
     if not isinstance(is_archived, bool):
         return skip(SkipReason.ARCHIVED_STATE_UNKNOWN)
