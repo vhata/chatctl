@@ -8,6 +8,12 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 ### P1 High
 
+- [API] `record-field-shapes` — **Record in `docs/api-findings.md` whether `update_time` and `create_time` carry a UTC offset (and fractional seconds), and whether `title` can be null or missing.** Question 4 says only "ISO 8601" because the probe classifies timestamps by their date prefix, and the selection rules skip any timestamp without an offset, so an offset-free API would select nothing.
+  - Source: todo/select-conversations (#6), 2026-10-15
+  - Depends on: `choose-browser-transport`
+  - Related: `archive-dry-run`
+  - Starting point: the transport proof of concept counts these shapes (never values); record its output under questions 4 and 1. Selection fails safe either way, so this decides whether `archive-dry-run` can select anything, not whether it is safe.
+
 - [API] `capture-archive-patch-headers` — **Record the names of the headers the web UI sends with its archive `PATCH`, and whether a `PATCH` carrying only `Authorization` is accepted.** Question 11 in `docs/api-findings.md` is open on this, and no code may send a `PATCH` until it is answered.
   - Source: triage of `docs/api-findings.md`, 2026-10-15
   - Blocked by: the user capturing an archive and an unarchive of a throwaway conversation in the browser's Network tab (header names only, never values).
@@ -37,6 +43,9 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
   - Depends on: `archive-apply`
 
 ### P3 Low
+
+- [TOOLING] `annotate-test-functions` — **Decide whether to annotate every test function and drop the mypy override for `tests/`.** The type-check gate checks test bodies but does not require test signatures to be annotated, which is the only relaxation of `--strict`.
+  - Source: todo/choose-type-checker (#5), 2026-10-15
 
 - [CLI] `exclude-starred-and-automation` — **Decide whether `archive` should skip starred conversations and scheduled-task conversations, and how.** The listing carries `is_starred` and `is_automation_conversation` (`docs/api-findings.md`, question 14), but no starred item and no star request has been observed, so a `--keep-starred` option would rest on a field nobody has seen set.
   - Source: triage of `docs/api-findings.md`, 2026-10-15
