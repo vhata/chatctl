@@ -2,6 +2,13 @@
 
 Non-obvious choices and their trade-offs, dated, newest section first. Read the relevant entry before changing a mechanism that looks odd. Choices made autonomously under a delegation are recorded here for the user to review; an entry is a record, not a claim that the capability is complete.
 
+## 2026-10-15
+
+| Decision | Reason and trade-off |
+| --- | --- |
+| Selection also skips a conversation whose `conversation_template_id` is present and non-null, with its own reason (`conversation-template-id-set`). A missing `conversation_template_id` is not a reason to skip. | [api-findings.md](api-findings.md), question 5, records `conversation_template_id` as non-null on as many items as `gizmo_id` without recording whether they are the same items, and [AGENTS.md](../AGENTS.md#rules) says any doubt about membership means skip. If they are the same items the check never fires, since `gizmo_id` is checked first; if not, it holds back conversations whose kind is unknown. A distinct reason keeps those countable in a dry run. Only `gizmo_id` is required to be present, because that is the recorded membership field; requiring this one too would turn a harmless API change into archiving nothing. Revisit once the probe records whether the two fields coincide. |
+| Selection accepts a conversation id only if it is made of ASCII letters, digits, `-` and `_`, and skips any other as `bad-id`. The UUID-like format is not required. | Ids go into the `PATCH /backend-api/conversation/<id>` path and the manifest, so a value with `/`, `.`, `?`, `#`, `%`, whitespace or control characters could address a different resource or corrupt the manifest. Refusing them is simpler and safer than escaping them. The id format is not recorded in api-findings, so nothing stricter is assumed. |
+
 ## 2026-10-14
 
 | Decision | Reason and trade-off |
