@@ -13,6 +13,9 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
   - Depends on: `choose-browser-transport`
   - Related: `archive-dry-run`
   - Starting point: the transport proof of concept counts these shapes (never values); record its output under questions 4 and 1. Selection fails safe either way, so this decides whether `archive-dry-run` can select anything, not whether it is safe.
+  - The decision record should state the cost of the transport, for example that while a DevTools port is open any local process can control the whole browser. Source: review of #7, 2026-10-15.
+  - Also record whether `conversation_template_id` and `gizmo_id` are non-null on the same items; selection skips a non-null `conversation_template_id` until this is known (#6). The proof of concept in #7 counts the co-occurrence.
+  - The `--exclude` help should say that a conversation with a null title never matches a pattern. Source: review of #6, 2026-10-15.
 
 - [API] `capture-archive-patch-headers` — **Record the names of the headers the web UI sends with its archive `PATCH`, and whether a `PATCH` carrying only `Authorization` is accepted.** Question 11 in `docs/api-findings.md` is open on this, and no code may send a `PATCH` until it is answered.
   - Source: triage of `docs/api-findings.md`, 2026-10-15
@@ -23,6 +26,9 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
   - Source: triage of `docs/api-findings.md`, 2026-10-15
   - Depends on: `choose-browser-transport`
   - Starting point: offset/limit paging with `limit=100`, stopping at `offset + len(items) >= total` or an empty page; requests one at a time with bounded retries and backoff on 429 and 5xx (AGENTS.md rules). Test against fixtures shaped like the recorded responses, behind a fake transport.
+  - Decode responses rejecting duplicate JSON keys (`object_pairs_hook`): `json.loads` keeps the last duplicate, so a doubled `gizmo_id` could read as null. Source: review of #6, 2026-10-15.
+  - Percent-encode ids in request paths (`quote(id, safe="")`) even though selection restricts their characters. Source: review of #6, 2026-10-15.
+  - With remaldi, always pass an explicit `--target` and check `location.origin` in the page: remaldi's default target is Vivaldi's privileged UI page. Decide whether fetching the session on every page (two GETs per page in the proof of concept) is acceptable or how to reuse the token without it leaving the page. Source: #7, 2026-10-15.
 
 ### P2 Normal
 
@@ -37,6 +43,8 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 - [CLI] `archive-apply` — **Make `chatctl archive --apply` write the manifest, then archive exactly the conversations in it, recording each result.** This is the mutation the tool exists for.
   - Source: triage, 2026-10-15
   - Depends on: `archive-dry-run`, `archive-manifest-format`, `capture-archive-patch-headers`
+  - A transport timeout can leave it unknown whether a `PATCH` was applied (remaldi reports `unknown_outcome` and never replays). Re-read the conversation's state rather than resending, and record such conversations as unknown in the manifest. Source: #7, 2026-10-15.
+  - Per-conversation status needs an unknown state for requests whose outcome the transport could not report (see `archive-apply`). Source: #7, 2026-10-15.
 
 - [CLI] `undo-command` — **Make `chatctl undo MANIFEST` unarchive exactly the conversations a manifest records as archived.** Undo is the other half of the safety principle.
   - Source: triage, 2026-10-15
