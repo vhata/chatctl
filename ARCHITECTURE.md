@@ -5,7 +5,7 @@ What the structure is now, the boundaries parallel work must respect, and the in
 ## Layout
 
 - `chatctl/cli.py`: the argparse command-line surface (`stats`, `archive`, `undo`). Parses and validates options; every command currently exits 1 with "not implemented yet".
-- `chatctl/selection.py`: pure helpers that turn `--older-than` / `--before` into an archive cutoff.
+- `chatctl/selection.py`: pure helpers that turn `--older-than` / `--before` into an archive cutoff, and `select_conversations`, which splits conversation listing items into the conversations to archive and the skipped ones, each with a reason. It is the one place the selection safety rules are applied; its docstring gives the order of the checks. Nothing calls it yet.
 - `chatctl/__main__.py`: `python -m chatctl` entry point; the `chatctl` console script is declared in `pyproject.toml`.
 - `tests/`: pytest suites for the CLI and the selection helpers.
 - `discovery/probe.js`: a read-only probe the user pastes into the DevTools console of a logged-in chatgpt.com tab. Outside a browser it exports its pure functions instead of running, which is how `discovery/probe.test.js` tests it with `node --test`.
@@ -19,7 +19,8 @@ What the structure is now, the boundaries parallel work must respect, and the in
 
 ## Invariants
 
-- `chatctl/selection.py` reads no clock: the current time is passed in as a timezone-aware `now`. Callers in `cli.py` supply `datetime.now(UTC)`.
+- `chatctl/selection.py` reads no clock and does no I/O: the current time is passed in as a timezone-aware `now` and the cutoff as a timezone-aware datetime. Callers in `cli.py` supply `datetime.now(UTC)`.
+- `select_conversations` selects an item only when every check passes, and treats a missing or malformed field as a reason to skip, never as a default. The one deliberate exception is a missing `conversation_template_id` ([docs/DECISIONS.md](docs/DECISIONS.md)). A selected conversation's id contains only ASCII letters, digits, `-` and `_`, so it is safe in a request path. It does not modify its input.
 - Every network request in `discovery/probe.js` goes through `makeGet`, which issues GET requests only.
 - The safety rules in [AGENTS.md](AGENTS.md#rules) (dry run without `--apply`, a fixed manifest before the first change, never touching project or custom GPT conversations, no account data in the repository) apply to all code; this file does not restate them.
 

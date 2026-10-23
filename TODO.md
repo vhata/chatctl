@@ -73,7 +73,7 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 - [CLI] `archive-dry-run` — **Make `chatctl archive` without `--apply` list the selection and its summary against the live listing.** This is the brief's first workflow, and it changes nothing.
   - Source: triage, 2026-10-15
-  - Depends on: `conversation-client`, `select-conversations`
+  - Depends on: `conversation-client`
 
 - [CLI] `archive-apply` — **Make `chatctl archive --apply` write the manifest, then archive exactly the conversations in it, recording each result.** This is the mutation the tool exists for.
   - Source: triage, 2026-10-15
@@ -94,10 +94,6 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 ### P0 Critical
 
 ### P1 High
-
-- [CLI] `select-conversations` — **Add a pure selection function that takes listing items and a cutoff and returns the conversations to archive and the ones skipped, each with a reason.** It is the core of the safety rules and depends on no transport: only fields already recorded in `docs/api-findings.md`.
-  - Source: triage, 2026-10-15
-  - Starting point: `chatctl/selection.py`. Select only items whose `gizmo_id` is present and null, `is_archived` is false, and `update_time` (ISO 8601) is strictly before the cutoff; skip anything whose fields are missing or unparseable; apply `--exclude` patterns to titles. Tests use placeholder titles and IDs.
 
 ### P2 Normal
 
