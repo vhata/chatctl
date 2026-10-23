@@ -25,7 +25,7 @@ What the structure is now, the boundaries parallel work must respect, and the in
 
 ## Isolation for concurrent work
 
-Each worktree owns its mutable state: its own `.venv/` created by `bash scripts/setup.sh`, and `.pytest_cache/` and `.ruff_cache/`, all ignored by git. Nothing binds ports or writes outside the worktree. Hooks come from each worktree's own `.githooks/` because `core.hooksPath` is relative.
+Each worktree owns its mutable state: its own `.venv/` created by `bash scripts/setup.sh`, and `.pytest_cache/`, `.ruff_cache/` and `.mypy_cache/`, all ignored by git. Nothing binds ports or writes outside the worktree. Hooks come from each worktree's own `.githooks/` because `core.hooksPath` is relative.
 
 ## Where to look first
 

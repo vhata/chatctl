@@ -54,6 +54,9 @@ def cutoff_from(
         raise ValueError("now must be timezone-aware")
     if before is not None:
         return before
+    # The exactly-one check above guarantees this; the type checker cannot
+    # follow it through the comparison.
+    assert older_than is not None
     try:
         return now - older_than
     except OverflowError:

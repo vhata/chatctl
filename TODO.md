@@ -105,10 +105,6 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
   - Source: triage, 2026-10-15
   - Starting point: a short design spec in `docs/specs/` agreed with the user first (location outside the repository, atomic writes, per-conversation status so an interrupted run can be resumed or undone), then a pure module with read, write and validation and its tests.
 
-- [TOOLING] `choose-type-checker` — **Add a static type-check gate for `chatctl/` and `tests/`.** The code is fully annotated (including PEP 695 generics) but nothing checks the annotations, and `scripts/check.sh` has no typecheck step.
-  - Source: docket adoption, branch vhata/docket-setup, 2026-10-14
-  - Starting point: try mypy `--strict` and basedpyright against the current code, compare noise, then add `scripts/typecheck.sh` and the gate in `scripts/check.sh`, `.githooks/pre-push` (through check.sh) and `docs/QUALITY.md`.
-
 ### P3 Low
 
 ### Unprioritized

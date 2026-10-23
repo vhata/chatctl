@@ -24,8 +24,25 @@ extend-exclude = ["docket"]
 # results do not change when a new ruff release alters its default rule set.
 select = ["E4", "E7", "E9", "F", "I"]
 
+[tool.mypy]
+python_version = "3.12"
+files = ["chatctl", "tests"]
+strict = true
+# tests/ has no __init__.py; this names its modules tests.* for the override
+# below.
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# pytest injects fixtures and parametrized values by name, so annotating
+# every test function adds ceremony without catching bugs. Test bodies are
+# still checked against the annotated code they call.
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
 [dependency-groups]
 dev = [
+    "mypy>=2.4.0",
     "pytest>=9.1.1",
     "ruff>=0.17.0",
 ]
