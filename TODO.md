@@ -64,7 +64,6 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 - [CLI] `undo-command` — **Make `chatctl undo MANIFEST` unarchive exactly the conversations a manifest records as archived.** Undo is the other half of the safety principle.
   - Source: triage, 2026-10-15
   - Depends on: `archive-apply`
-  - Per-conversation status needs an unknown state for requests whose outcome the transport could not report (see `archive-apply`). Source: #7, 2026-10-15.
 
 ### P3 Low
 
@@ -88,6 +87,7 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 - [CLI] `archive-manifest-format` — **Design and implement the archive manifest: what it records, where it is written, and how a partly applied run is resumed or undone.** It is the interface between `archive` and `undo` and must land before either depends on it (ARCHITECTURE.md).
   - Source: triage, 2026-10-15
   - Starting point: a short design spec in `docs/specs/` agreed with the user first (location outside the repository, atomic writes, per-conversation status so an interrupted run can be resumed or undone), then a pure module with read, write and validation and its tests.
+  - Per-conversation status needs an unknown state for requests whose outcome the transport could not report (see `archive-apply`). Source: #7, 2026-10-15.
 
 ### P3 Low
 
