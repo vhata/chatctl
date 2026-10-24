@@ -212,10 +212,10 @@ defaults; the names alone do not say which. The web app sets the rest:
 `oai-language`, `originator`, `x-openai-codex-window-type`,
 `x-openai-rate-limit-join-workspace` and `x-openai-web-frontend`. None is
 named like a CSRF or sentinel token, but the device and account headers
-could be checked. Whether a PATCH from the page accepts `Authorization`
-and `Content-Type` as its only app-set headers, with the browser's own
-headers and cookies going along as always, is still open; no code may
-send a PATCH until it is answered.
+could be checked. Whether the server accepts a PATCH from the page
+whose only app-set headers are `Authorization` and `Content-Type`, with
+the browser's own headers and cookies going along as always, is still
+open; no code may send a PATCH until it is answered.
 
 Outside the browser, Cloudflare's bot challenge blocks requests before
 any application-level check could apply (see question 10).
