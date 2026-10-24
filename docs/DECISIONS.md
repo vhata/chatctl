@@ -2,6 +2,13 @@
 
 Non-obvious choices and their trade-offs, dated, newest section first. Read the relevant entry before changing a mechanism that looks odd. Choices made autonomously under a delegation are recorded here for the user to review; an entry is a record, not a claim that the capability is complete.
 
+## 2026-10-24
+
+| Decision | Reason and trade-off |
+| --- | --- |
+| chatctl reaches the ChatGPT API by evaluating JavaScript in an open, logged-in chatgpt.com tab over the DevTools protocol, through the user's `remaldi evaluate --await-promise --return-by-value` against Vivaldi started with `--remote-debugging-port`. Python runs the loop; each request is one evaluation in which the page makes the request with its own `fetch`, and only the data chatctl needs is returned. | Requests from the page carry the browser's cookies, TLS fingerprint and Cloudflare clearance, which a plain HTTP client lacks, and the proof of concept paged the whole listing this way without a retry ([api-findings.md](api-findings.md), question 10). Keeping Python in control keeps selection, the manifest and undo in chatctl, where they are tested. The alternatives were a console script pasted into the tab, which would move that logic into JavaScript and make the manifest a copy-and-paste step, and browser automation such as Playwright, which could attach to the same browser over the same debugging port but adds a large dependency for what one command already does. The costs: while the debugging port is open any local process can control the whole browser, so the user relaunches Vivaldi normally afterwards; chatctl depends on remaldi, an external command rather than a Python dependency (speaking the DevTools protocol directly would need a WebSocket client, which the standard library lacks); remaldi's default target is Vivaldi's privileged UI page, so every call must name the tab explicitly; and a timed-out evaluation has an unknown outcome that remaldi never replays, so a mutation must be confirmed by re-reading state rather than resent. |
+| Selection keeps skipping a non-null `conversation_template_id` even though it is now recorded as non-null on exactly the items whose `gizmo_id` is non-null. | The check never fires on the observed data, so it costs nothing, and it still holds back a conversation if the two fields ever diverge, which is the kind of membership doubt [AGENTS.md](../AGENTS.md#rules) says to skip on. |
+
 ## 2026-10-15
 
 | Decision | Reason and trade-off |
