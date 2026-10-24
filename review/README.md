@@ -4,9 +4,7 @@ Historical codebase reviews are immutable snapshots; the newest snapshot is the 
 
 | Review (UTC) | Type | Reviewed commit | Open findings at close |
 | --- | --- | --- | --- |
-<!-- Example row; replace this comment with the first real row. `docket/scripts/review-due.sh` parses the table, so keep the shape:
-     | 2026-01-31 | Full | `abc1234` | 12 |
-     Type is Full or Incremental, the commit is backticked, and the newest row goes first. -->
+| [2026-10-24 02:47](2026-10-24-0247-full.md) | Full | `a156a672ffa09306b732fecedbeab8d45cbc5844` | 3 |
 
 <!-- This section must stay below the index table: review-due.sh reads the first table row with a backticked commit as the latest review. -->
 ## Pending reconciliation
