@@ -81,7 +81,7 @@ Evidence: probe 2026-10-14.
 ### 4. What fields are returned for creation/update time?
 
 Finding: `create_time` and `update_time`, both ISO 8601 strings, present on
-every item. Both are in UTC with a trailing `Z`; none had a numeric offset
+every item. Both were in UTC with a trailing `Z`; none had a numeric offset
 and none lacked a zone. `create_time` always had fractional seconds;
 `update_time` had them on most items but not all, so a parser must accept
 both forms. `pinned_time` and `latest_assistant_turn_created_at` also exist
@@ -100,9 +100,9 @@ Finding: by `gizmo_id`. Project conversations have a `gizmo_id` beginning
 GPT conversation, which is not a project; that reading comes from the ID
 scheme, not from checking those conversations one by one, and the skip
 rule does not depend on it. Ordinary conversations have `gizmo_id: null`.
-`conversation_template_id` is non-null on exactly the items whose
-`gizmo_id` is non-null, project and custom GPT conversations alike, and
-null on every other item.
+`conversation_template_id` was non-null on exactly the items whose
+`gizmo_id` was non-null, project and custom GPT conversations alike, and
+null on every other item (2026-10-24).
 `workspace_id` was null on every item.
 
 Projects are listed by `GET /backend-api/gizmos/snorlax/sidebar`, which
@@ -187,8 +187,8 @@ evaluating JavaScript in a logged-in chatgpt.com tab with
 fetches `/api/auth/session` and then one listing page with the page's own
 `fetch`, paged the whole listing with Python running the loop. Every
 evaluation returned HTTP 200 for both requests, with no retries; each
-took roughly one to three and a half seconds, including the session
-fetch. The choice of transport is recorded in
+`remaldi` call took roughly one to three seconds, including the session
+fetch and remaldi's own overhead. The choice of transport is recorded in
 [`DECISIONS.md`](DECISIONS.md).
 
 Evidence: local access check 2026-10-14, output
@@ -200,17 +200,21 @@ concept 2026-10-24.
 Finding: for GETs, none observed. The probe's GETs from the page's origin
 succeed with only the `Authorization` header added.
 
-For the archive PATCH, the UI sends these headers. The browser adds the
-following to any `fetch` from the page: `accept-language`, `origin`,
-`priority`, `referer`, `sec-ch-ua`, `sec-ch-ua-mobile`,
-`sec-ch-ua-platform`, `sec-fetch-dest`, `sec-fetch-mode`,
-`sec-fetch-site` and `user-agent`. The web app sets the rest: `accept`,
-`authorization`, `chatgpt-account-id`, `content-type`, `oai-device-id`,
-`oai-did`, `oai-language`, `originator`, `x-openai-codex-window-type`,
+For the archive PATCH, the captured request headers were the names
+below (names only; the capture lists no `cookie` or `accept-encoding`).
+The browser adds these to a `fetch` like this one from the page:
+`accept-language`, `origin`, `priority`, `referer`, `sec-ch-ua`,
+`sec-ch-ua-mobile`, `sec-ch-ua-platform`, `sec-fetch-dest`,
+`sec-fetch-mode`, `sec-fetch-site` and `user-agent`. `accept` and
+`content-type` are set either by the web app or by the browser's
+defaults; the names alone do not say which. The web app sets the rest:
+`authorization`, `chatgpt-account-id`, `oai-device-id`, `oai-did`,
+`oai-language`, `originator`, `x-openai-codex-window-type`,
 `x-openai-rate-limit-join-workspace` and `x-openai-web-frontend`. None is
 named like a CSRF or sentinel token, but the device and account headers
-could be checked. Whether a PATCH from the page carrying only
-`Authorization` and `Content-Type` is accepted is still open; no code may
+could be checked. Whether a PATCH from the page accepts `Authorization`
+and `Content-Type` as its only app-set headers, with the browser's own
+headers and cookies going along as always, is still open; no code may
 send a PATCH until it is answered.
 
 Outside the browser, Cloudflare's bot challenge blocks requests before
