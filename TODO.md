@@ -27,10 +27,6 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 ### P1 High
 
-- [API] `choose-browser-transport` — **Decide how chatctl's requests reach a logged-in browser session, and record it.** A plain HTTP client carrying only the token is stopped by Cloudflare's bot challenge (`docs/api-findings.md`, question 10), so the listing, archive and undo code has nothing to send requests through.
-  - Source: vhata/probe-findings (#2), 2026-10-14
-  - Starting point: the candidates are a console script pasted into the tab, browser automation of an authenticated profile, and evaluating JavaScript in an open chatgpt.com tab over the DevTools protocol, for example through the user's `remaldi evaluate --target <tab> --await-promise --return-by-value` against Vivaldi started with `--remote-debugging-port`. On 2026-10-14 one read-only session and list request made that way returned 200 with the expected keys; that is a lead, not a recorded finding. A proof of concept should page the full listing that way, record the result in `docs/api-findings.md`, and add the choice to `docs/DECISIONS.md`. Agents can write the proof of concept; the user runs it.
-
 ### P2 Normal
 
 ### P3 Low
@@ -43,27 +39,11 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 ### P1 High
 
-- [API] `record-field-shapes` — **Record in `docs/api-findings.md` whether `update_time` and `create_time` carry a UTC offset (and fractional seconds), and whether `title` can be null or missing.** Question 4 says only "ISO 8601" because the probe classifies timestamps by their date prefix, and the selection rules skip any timestamp without an offset, so an offset-free API would select nothing.
-  - Source: todo/select-conversations (#6), 2026-10-15
-  - Depends on: `choose-browser-transport`
-  - Related: `archive-dry-run`
-  - Starting point: the transport proof of concept counts these shapes (never values); record its output under questions 4 and 1. Selection fails safe either way, so this decides whether `archive-dry-run` can select anything, not whether it is safe.
-  - The decision record should state the cost of the transport, for example that while a DevTools port is open any local process can control the whole browser. Source: review of #7, 2026-10-15.
-  - Also record whether `conversation_template_id` and `gizmo_id` are non-null on the same items; selection skips a non-null `conversation_template_id` until this is known (#6). The proof of concept in #7 counts the co-occurrence.
-  - The `--exclude` help should say that a conversation with a null title never matches a pattern. Source: review of #6, 2026-10-15.
-
-- [API] `capture-archive-patch-headers` — **Record the names of the headers the web UI sends with its archive `PATCH`, and whether a `PATCH` carrying only `Authorization` is accepted.** Question 11 in `docs/api-findings.md` is open on this, and no code may send a `PATCH` until it is answered.
-  - Source: triage of `docs/api-findings.md`, 2026-10-15
-  - Blocked by: the user capturing an archive and an unarchive of a throwaway conversation in the browser's Network tab (header names only, never values).
-  - Starting point: record the header names under question 11, dated, with evidence; note any sentinel, device or CSRF header that the client would have to reproduce.
-
-- [API] `conversation-client` — **Page the full conversation listing through the chosen transport.** Every command needs the listing, and its pagination has a misleading `total` (`docs/api-findings.md`, question 2).
-  - Source: triage of `docs/api-findings.md`, 2026-10-15
-  - Depends on: `choose-browser-transport`
-  - Starting point: offset/limit paging with `limit=100`, stopping at `offset + len(items) >= total` or an empty page; requests one at a time with bounded retries and backoff on 429 and 5xx (AGENTS.md rules). Test against fixtures shaped like the recorded responses, behind a fake transport.
-  - Decode responses rejecting duplicate JSON keys (`object_pairs_hook`): `json.loads` keeps the last duplicate, so a doubled `gizmo_id` could read as null. Source: review of #6, 2026-10-15.
-  - Percent-encode ids in request paths (`quote(id, safe="")`) even though selection restricts their characters. Source: review of #6, 2026-10-15.
-  - With remaldi, always pass an explicit `--target` and check `location.origin` in the page: remaldi's default target is Vivaldi's privileged UI page. Decide whether fetching the session on every page (two GETs per page in the proof of concept) is acceptable or how to reuse the token without it leaving the page. Source: #7, 2026-10-15.
+- [API] `test-minimal-archive-patch` — **Find out whether an archive `PATCH` made from the page with only `Authorization` and `Content-Type` is accepted, and if not, which of the web app's own headers it needs.** The UI sends device and account headers whose values chatctl would have to reproduce (`docs/api-findings.md`, question 11), and no code may send a `PATCH` until this is known.
+  - Source: todo/choose-browser-transport (#7), 2026-10-24
+  - Remaining from: `capture-archive-patch-headers`
+  - Blocked by: the user archiving and then unarchiving a throwaway conversation from the tab, once with only those two headers and, if that fails, adding the app's headers back until it succeeds.
+  - Starting point: a one-off snippet for the console or `remaldi evaluate` that sends `PATCH /backend-api/conversation/<id>` with `{"is_archived": true}` for an ID the user pastes in, then the same with `false`; record the outcome under question 11.
 
 ### P2 Normal
 
@@ -77,7 +57,7 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 - [CLI] `archive-apply` — **Make `chatctl archive --apply` write the manifest, then archive exactly the conversations in it, recording each result.** This is the mutation the tool exists for.
   - Source: triage, 2026-10-15
-  - Depends on: `archive-dry-run`, `archive-manifest-format`, `capture-archive-patch-headers`
+  - Depends on: `archive-dry-run`, `archive-manifest-format`, `test-minimal-archive-patch`
   - A transport timeout can leave it unknown whether a `PATCH` was applied (remaldi reports `unknown_outcome` and never replays). Re-read the conversation's state rather than resending, and record such conversations as unknown in the manifest. Source: #7, 2026-10-15.
   - Per-conversation status needs an unknown state for requests whose outcome the transport could not report (see `archive-apply`). Source: #7, 2026-10-15.
 
@@ -94,6 +74,13 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 ### P0 Critical
 
 ### P1 High
+
+- [API] `conversation-client` — **Page the full conversation listing through the transport recorded in `docs/DECISIONS.md` (`remaldi evaluate` in a logged-in tab).** Every command needs the listing, and its pagination has a misleading `total` (`docs/api-findings.md`, question 2).
+  - Source: triage of `docs/api-findings.md`, 2026-10-15
+  - Starting point: `discovery/transport_poc.py` already does this read-only for aggregate counts; the client returns the listing fields selection needs instead. Offset/limit paging with `limit=100`, stopping at `offset + len(items) >= total` or an empty page; requests one at a time with bounded retries and backoff on 429 and 5xx (AGENTS.md rules). Test against fixtures shaped like the recorded responses, behind a fake transport.
+  - Decode responses rejecting duplicate JSON keys (`object_pairs_hook`): `json.loads` keeps the last duplicate, so a doubled `gizmo_id` could read as null. Source: review of #6, 2026-10-15.
+  - Percent-encode ids in request paths (`quote(id, safe="")`) even though selection restricts their characters. Source: review of #6, 2026-10-15.
+  - With remaldi, always pass an explicit `--target` and check `location.origin` in the page: remaldi's default target is Vivaldi's privileged UI page. Decide whether fetching the session on every page (two GETs per page in the proof of concept) is acceptable or how to reuse the token without it leaving the page. Source: #7, 2026-10-15.
 
 ### P2 Normal
 
