@@ -8,6 +8,12 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 ### P1 High
 
+- [API] `patch-listing-disagreement` — **Find out why a conversation archived by a direct `PATCH` from the page appears in both listings, archived in one and not in the other, and stays in the sidebar.** chatctl's selection, verification and undo read the listings, so they cannot rely on either one until it is known which reflects the server's state and whether the other catches up.
+  - Source: user's minimal-PATCH test for `capture-archive-patch-headers`, 2026-10-24
+  - Related: `archive-apply`, `undo-command`
+  - Evidence, one throwaway conversation, 2026-10-24: a `PATCH /backend-api/conversation/<id>` with `{"is_archived": true}`, made from the tab's (wrapped, non-native) `fetch` with only `Authorization` and `Content-Type` set by the caller, returned 200 `{"success": true}`. Afterwards the conversation was in `?is_archived=true` with `is_archived: true` and in Settings, Archived chats, but also in the default listing with `is_archived: false` and a different `update_time`, and in the sidebar after a fresh load in a new tab. When archived from the web UI on 2026-10-14 it left the default listing (`docs/api-findings.md`, question 13).
+  - Starting point: repeat the read-only two-listing check later to see whether the default listing catches up; compare against a second throwaway archived from the UI with the Network tab recording every request it makes; record the request headers the wrapped `fetch` actually sent.
+
 ### P2 Normal
 
 ### P3 Low
