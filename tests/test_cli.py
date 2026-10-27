@@ -1,4 +1,6 @@
 import argparse
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -75,6 +77,32 @@ def test_archive_bad_date_shows_reason(capsys):
 def test_archive_bad_regex_shows_reason(capsys):
     err = usage_error(capsys, "archive", "--older-than", "90d", "--exclude", "(")
     assert "invalid regex '('" in err
+
+
+@pytest.mark.parametrize(
+    "pattern", ["a{4294967295}", "a{1,4294967295}", "a{4294967295,}"]
+)
+def test_archive_oversized_regex_repetition_is_a_usage_error(pattern):
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "chatctl",
+            "archive",
+            "--older-than",
+            "90d",
+            "--exclude",
+            pattern,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "usage:" in result.stderr
+    assert f"argument --exclude: invalid regex {pattern!r}" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_undo_requires_manifest(capsys):

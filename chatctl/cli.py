@@ -26,7 +26,7 @@ def _checked[T](parse: Callable[[str], T]) -> Callable[[str], T]:
 def _regex(text: str) -> re.Pattern[str]:
     try:
         return re.compile(text, re.IGNORECASE)
-    except re.error as exc:
+    except (re.error, OverflowError) as exc:
         raise argparse.ArgumentTypeError(f"invalid regex {text!r}: {exc}") from None
 
 
