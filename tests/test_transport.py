@@ -41,6 +41,27 @@ def test_explicit_command_and_round_trip_raw_body():
     assert calls[0][-1] == build_page_expression(0, 100)
 
 
+@pytest.mark.parametrize("archived", [False, True])
+def test_transport_selects_listing_scope(archived):
+    calls: list[Sequence[str]] = []
+
+    def run(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return completed({"ok": True, "body": "{}"})
+
+    transport = RemaldiTransport("tab", archived=archived, run=run)
+    assert transport.get_page(100, 25) == "{}"
+    assert calls[0][-1] == build_page_expression(100, 25, archived=archived)
+
+
+@pytest.mark.parametrize("archived", [None, 0, 1, "false", "true", [], {}])
+def test_archived_scope_requires_exact_boolean(archived):
+    with pytest.raises(ValueError, match="archived must be a boolean"):
+        RemaldiTransport("tab", archived=archived)
+    with pytest.raises(ValueError, match="archived must be a boolean"):
+        build_page_expression(0, 100, archived=archived)
+
+
 @pytest.mark.parametrize("target", ["", " ", "--target"])
 def test_target_required(target):
     with pytest.raises(ValueError):
@@ -178,11 +199,17 @@ def test_default_runner_uses_bounded_subprocess(monkeypatch):
 
 # Node evaluates only the generated JavaScript. No real fetch is installed.
 def execute_page(
-    *, origin: str = "https://chatgpt.com", scenario: str = "ok", timeout_ms: int = 4000
+    *,
+    origin: str = "https://chatgpt.com",
+    scenario: str = "ok",
+    timeout_ms: int = 4000,
+    archived: bool = False,
 ) -> dict[str, object]:
     node = shutil.which("node")
     assert node is not None, "Node is required for page-script validation"
-    script = build_page_expression(100, 100).replace("4000", str(timeout_ms))
+    script = build_page_expression(100, 100, archived=archived).replace(
+        "4000", str(timeout_ms)
+    )
     harness = r"""
 const calls = [];
 const scenario = __SCENARIO__;
@@ -222,22 +249,25 @@ globalThis.fetch = async (path, options) => {
     return value
 
 
-def test_page_uses_get_only_and_preserves_duplicate_json():
-    result = execute_page()
+@pytest.mark.parametrize("archived", [False, True])
+def test_page_uses_get_only_and_preserves_duplicate_json(archived):
+    result = execute_page(archived=archived)
     calls = result["calls"]
     assert isinstance(calls, list) and len(calls) == 2
     assert [c["method"] for c in calls] == ["GET", "GET"]
     assert all(c["body"] is None for c in calls)
     assert calls[0]["headers"] == {}
     assert calls[1]["headers"] == {"Authorization": "Bearer secret"}
-    assert (
-        calls[1]["path"]
-        == "/backend-api/conversations?offset=100&limit=100&order=updated"
-    )
+    expected_path = "/backend-api/conversations?offset=100&limit=100&order=updated"
+    if archived:
+        expected_path += "&is_archived=true"
+    assert calls[1]["path"] == expected_path
     value = result["value"]
     assert isinstance(value, dict) and value["ok"] is True
     assert "secret" not in json.dumps(value)
-    transport = RemaldiTransport("tab", run=lambda _: completed(value))
+    transport = RemaldiTransport(
+        "tab", archived=archived, run=lambda _: completed(value)
+    )
     with pytest.raises(ClientError, match="invalid_json"):
         ConversationClient(transport).list_conversations()
 
