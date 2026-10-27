@@ -45,7 +45,7 @@ class ConversationClient:
         self._max_pages = max_pages
 
     def list_conversations(self) -> tuple[object, ...]:
-        """Return the default listing (normally unarchived), or fail in full.
+        """Return the transport's configured listing, or fail in full.
 
         Each page's total means 'at least one more' until the final page;
         never use the first page's total as the history size. No account data

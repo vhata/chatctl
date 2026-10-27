@@ -80,9 +80,6 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 ### P2 Normal
 
-- [CLI] `stats-command` — **Make `chatctl stats` summarise the listing: counts by kind (ordinary, project, custom GPT), archived state and age.** A read-only command is the first end-to-end use of the client and the safest one.
-  - Source: triage, 2026-10-15
-
 - [CLI] `archive-dry-run` — **Make `chatctl archive` without `--apply` list the selection and its summary against the live listing.** This is the brief's first workflow, and it changes nothing.
   - Source: triage, 2026-10-15
   - The `--exclude` help should say that a conversation with a null title never matches a pattern. Source: review of #6, 2026-10-15.
