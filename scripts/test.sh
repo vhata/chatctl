@@ -5,8 +5,8 @@
 # pass at least one test: a suite that collects nothing, or skips
 # everything, fails here.
 # pytest exits 5 on empty collection but 0 when every test is skipped, so
-# its JUnit report is checked; node exits 0 in both cases, so its TAP
-# summary is checked.
+# its JUnit report is checked; node exits 0 in both cases, so its per-file
+# summaries are checked (the aggregate includes empty file wrappers).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -36,13 +36,15 @@ fi
 
 echo "--> node --test discovery/"
 status=0
-node --test --test-reporter=tap discovery/ > "$out" 2>&1 || status=$?
+node --test --test-reporter=tap --test-reporter-destination=stdout \
+  --test-reporter=./scripts/node-pass-count.js \
+  --test-reporter-destination="$tmp/node-passed" discovery/ > "$out" 2>&1 || status=$?
 if [ "$status" -ne 0 ]; then
   cat "$out"
   exit "$status"
 fi
 tail -n 9 "$out"
-if ! grep -Eq '^# pass [1-9][0-9]*$' "$out"; then
+if ! grep -Eq '^[1-9][0-9]*$' "$tmp/node-passed"; then
   echo "test: node --test passed no tests in discovery/ (none found, or all skipped)" >&2
   exit 1
 fi
