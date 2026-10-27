@@ -61,7 +61,7 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 - [CLI] `archive-apply` — **Make `chatctl archive --apply` write the manifest, then archive exactly the conversations in it, recording each result.** This is the mutation the tool exists for.
   - Source: triage, 2026-10-15
-  - Depends on: `archive-dry-run`, `archive-manifest-format`, `test-minimal-archive-patch`
+  - Depends on: `archive-manifest-format`, `test-minimal-archive-patch`
   - A transport timeout can leave it unknown whether a `PATCH` was applied (remaldi reports `unknown_outcome` and never replays). Re-read the conversation's state rather than resending, and record such conversations as unknown in the manifest. Source: #7, 2026-10-15.
 
 - [CLI] `undo-command` — **Make `chatctl undo MANIFEST` unarchive exactly the conversations a manifest records as archived.** Undo is the other half of the safety principle.
@@ -79,10 +79,6 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 ### P1 High
 
 ### P2 Normal
-
-- [CLI] `archive-dry-run` — **Make `chatctl archive` without `--apply` list the selection and its summary against the live listing.** This is the brief's first workflow, and it changes nothing.
-  - Source: triage, 2026-10-15
-  - The `--exclude` help should say that a conversation with a null title never matches a pattern. Source: review of #6, 2026-10-15.
 
 ### P3 Low
 
