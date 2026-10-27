@@ -11,8 +11,3 @@ Only work promoted from whole-codebase reviews belongs here. Every entry is read
 ## P3 Low
 
 ## Unprioritized
-
-- [CLI] `handle-regex-overflow` — **Report oversized exclusion regex repetitions as usage errors.** An invalid repetition currently escapes argument validation as an uncaught `OverflowError`.
-  - Source: [full review](2026-10-24-0247-full.md), 2026-10-24
-  - Findings: `regex-repetition-overflow`
-  - Starting point: `chatctl/cli.py:26` (`_regex`); handle regex repetition overflow and cover `--exclude 'a{4294967295}'` in CLI tests. It should exit 2 with an invalid-pattern message and no traceback.
