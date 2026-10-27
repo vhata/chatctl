@@ -360,7 +360,8 @@
     try {
       return await fn();
     } catch (error) {
-      return { error: String(error) };
+      // Match walkList: messages can embed URLs or private response text.
+      return { error: error?.name ?? "Error" };
     }
   }
 
