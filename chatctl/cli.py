@@ -8,8 +8,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from chatctl import __version__
+from chatctl.archive import render_archive
 from chatctl.client import ConversationClient
-from chatctl.selection import cutoff_from, parse_date, parse_duration
+from chatctl.selection import (
+    cutoff_from,
+    parse_date,
+    parse_duration,
+    select_conversations,
+)
 from chatctl.stats import render_stats, summarise
 from chatctl.transport import ClientError, RemaldiTransport
 
@@ -52,7 +58,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     archive = commands.add_parser(
-        "archive", help="archive old conversations (dry run unless --apply)"
+        "archive", help="preview old conversations for archiving (read-only)"
+    )
+    archive.add_argument(
+        "--target",
+        required=True,
+        metavar="TAB",
+        help="explicit remaldi target for a logged-in https://chatgpt.com tab",
     )
     cutoff = archive.add_mutually_exclusive_group(required=True)
     cutoff.add_argument(
@@ -74,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="skip conversations whose title matches REGEX "
-        "(case-insensitive, repeatable)",
+        "(case-insensitive, repeatable; a null title never matches)",
     )
     archive.add_argument(
         "--list", action="store_true", help="print every selected conversation"
@@ -82,7 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
     archive.add_argument(
         "--apply",
         action="store_true",
-        help="actually archive; without this nothing is changed",
+        help="reserved for archiving; currently not implemented",
     )
 
     undo = commands.add_parser(
@@ -129,10 +141,29 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "archive":
         try:
-            cutoff_from(
+            cutoff = cutoff_from(
                 older_than=args.older_than, before=args.before, now=datetime.now(UTC)
             )
         except ValueError as exc:
             parser.error(str(exc))
+        if args.apply:
+            print("chatctl archive: not implemented yet", file=sys.stderr)
+            return 1
+        if not args.target.strip() or args.target.startswith("-"):
+            parser.error("an explicit tab target is required")
+        try:
+            items = ConversationClient(
+                RemaldiTransport(args.target)
+            ).list_conversations()
+            selection = select_conversations(items, cutoff=cutoff, exclude=args.exclude)
+            output = render_archive(selection, cutoff=cutoff, list_all=args.list)
+        except ClientError as exc:
+            print(f"chatctl archive: {exc}", file=sys.stderr)
+            return 1
+        except KeyboardInterrupt:
+            print("chatctl archive: interrupted", file=sys.stderr)
+            return 130
+        print(output)
+        return 0
     print(f"chatctl {args.command}: not implemented yet", file=sys.stderr)
     return 1

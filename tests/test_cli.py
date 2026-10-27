@@ -25,7 +25,7 @@ def usage_error(capsys: pytest.CaptureFixture[str], *argv: str) -> str:
 
 
 def test_archive_older_than_defaults():
-    args = parse("archive", "--older-than", "90d")
+    args = parse("archive", "--target", "tab", "--older-than", "90d")
     assert args.command == "archive"
     assert args.older_than == timedelta(days=90)
     assert args.before is None
@@ -35,7 +35,9 @@ def test_archive_older_than_defaults():
 
 
 def test_archive_before():
-    args = parse("archive", "--before", "2026-07-01", "--list", "--apply")
+    args = parse(
+        "archive", "--target", "tab", "--before", "2026-07-01", "--list", "--apply"
+    )
     assert args.before == datetime(2026, 7, 1, tzinfo=UTC)
     assert args.older_than is None
     assert args.list is True
@@ -44,14 +46,22 @@ def test_archive_before():
 
 def test_archive_exclude_is_repeatable_and_case_insensitive():
     args = parse(
-        "archive", "--older-than", "90d", "--exclude", "discord", "--exclude", "home"
+        "archive",
+        "--target",
+        "tab",
+        "--older-than",
+        "90d",
+        "--exclude",
+        "discord",
+        "--exclude",
+        "home",
     )
     assert [pattern.pattern for pattern in args.exclude] == ["discord", "home"]
     assert args.exclude[0].search("Discord bot ideas")
 
 
 def test_archive_requires_a_cutoff(capsys):
-    err = usage_error(capsys, "archive")
+    err = usage_error(capsys, "archive", "--target", "tab")
     assert "one of the arguments --older-than --before is required" in err
 
 
@@ -135,8 +145,7 @@ def test_version(capsys):
 @pytest.mark.parametrize(
     "argv",
     [
-        ["archive", "--older-than", "90d"],
-        ["archive", "--before", "2026-07-01", "--apply"],
+        ["archive", "--target", "tab", "--before", "2026-07-01", "--apply"],
         ["undo", "archive-run.json", "--apply"],
     ],
 )
@@ -148,7 +157,7 @@ def test_commands_are_not_implemented(argv, capsys):
 @pytest.mark.parametrize("duration", ["5000y", "999999999d"])
 def test_archive_duration_reaching_before_year_one_is_a_usage_error(duration, capsys):
     with pytest.raises(SystemExit) as exc_info:
-        main(["archive", "--older-than", duration])
+        main(["archive", "--target", "tab", "--older-than", duration])
     assert exc_info.value.code == 2
     assert "before year 1" in capsys.readouterr().err
 

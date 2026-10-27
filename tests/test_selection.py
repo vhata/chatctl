@@ -352,7 +352,15 @@ def test_exclude_patterns_match_anywhere_in_the_title():
 
 def test_exclude_patterns_are_case_insensitive_as_cli_compiles_them():
     args = build_parser().parse_args(
-        ["archive", "--older-than", "90d", "--exclude", "PLACEHOLDER"]
+        [
+            "archive",
+            "--target",
+            "tab",
+            "--older-than",
+            "90d",
+            "--exclude",
+            "PLACEHOLDER",
+        ]
     )
     result = select([item(1, title="a placeholder title")], exclude=args.exclude)
     assert reasons(result) == [SkipReason.EXCLUDED]
