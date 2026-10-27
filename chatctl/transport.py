@@ -94,7 +94,7 @@ PAGE_SCRIPT = """(async () => {
       return { ok: false, error: "no_token" };
     }
     const response = await get(
-      "/backend-api/conversations?offset=__OFFSET__&limit=__LIMIT__&order=updated", token);
+      "/backend-api/conversations?offset=__OFFSET__&limit=__LIMIT__&order=updated__ARCHIVED__", token);
     token = null;
     if (response.status !== 200) return httpFailure(response);
     // Do not parse this JSON here: JSON.parse silently accepts duplicate keys.
@@ -108,15 +108,18 @@ PAGE_SCRIPT = """(async () => {
 })()"""
 
 
-def build_page_expression(offset: int, limit: int) -> str:
+def build_page_expression(offset: int, limit: int, *, archived: bool = False) -> str:
     if type(offset) is not int or offset < 0:
         raise ValueError("offset must be a non-negative integer")
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("limit must be an integer between 1 and 100")
+    if type(archived) is not bool:
+        raise ValueError("archived must be a boolean")
     return (
         PAGE_SCRIPT.replace("__OFFSET__", str(offset))
         .replace("__LIMIT__", str(limit))
         .replace("__TIMEOUT_MS__", str(PAGE_TIMEOUT_MS))
+        .replace("__ARCHIVED__", "&is_archived=true" if archived else "")
     )
 
 
@@ -141,13 +144,21 @@ class RemaldiTransport:
     """
 
     def __init__(
-        self, target: str, *, remaldi: str = "remaldi", run: Runner = _run
+        self,
+        target: str,
+        *,
+        archived: bool = False,
+        remaldi: str = "remaldi",
+        run: Runner = _run,
     ) -> None:
         if not target.strip() or target.startswith("-"):
             raise ValueError("an explicit tab target is required")
+        if type(archived) is not bool:
+            raise ValueError("archived must be a boolean")
         self.target = target
         self.remaldi = remaldi
         self._run = run
+        self._archived = archived
 
     def get_page(self, offset: int, limit: int) -> str:
         command = [
@@ -158,7 +169,7 @@ class RemaldiTransport:
             "--await-promise",
             "--return-by-value",
             "--",
-            build_page_expression(offset, limit),
+            build_page_expression(offset, limit, archived=self._archived),
         ]
         try:
             result = self._run(command)

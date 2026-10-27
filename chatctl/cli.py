@@ -8,7 +8,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from chatctl import __version__
+from chatctl.client import ConversationClient
 from chatctl.selection import cutoff_from, parse_date, parse_duration
+from chatctl.stats import render_stats, summarise
+from chatctl.transport import ClientError, RemaldiTransport
 
 
 def _checked[T](parse: Callable[[str], T]) -> Callable[[str], T]:
@@ -40,7 +43,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
-    commands.add_parser("stats", help="summarise conversations (read-only)")
+    stats = commands.add_parser("stats", help="summarise conversations (read-only)")
+    stats.add_argument(
+        "--target",
+        required=True,
+        metavar="TAB",
+        help="explicit remaldi target for a logged-in https://chatgpt.com tab",
+    )
 
     archive = commands.add_parser(
         "archive", help="archive old conversations (dry run unless --apply)"
@@ -96,6 +105,28 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "stats":
+        if not args.target.strip() or args.target.startswith("-"):
+            parser.error("an explicit tab target is required")
+        try:
+            default = ConversationClient(
+                RemaldiTransport(args.target)
+            ).list_conversations()
+            archived = ConversationClient(
+                RemaldiTransport(args.target, archived=True)
+            ).list_conversations()
+            now = datetime.now(UTC)
+            output = render_stats(
+                summarise(default, now=now), summarise(archived, now=now)
+            )
+        except ClientError as exc:
+            print(f"chatctl stats: {exc}", file=sys.stderr)
+            return 1
+        except KeyboardInterrupt:
+            print("chatctl stats: interrupted", file=sys.stderr)
+            return 130
+        print(output)
+        return 0
     if args.command == "archive":
         try:
             cutoff_from(
