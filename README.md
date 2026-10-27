@@ -17,7 +17,10 @@ Early. So far there is:
   the ChatGPT web app's internal API behaves;
 - a read-only proof of concept that pages the conversation listing from
   a local process through a logged-in browser tab
-  ([transport proof of concept](discovery/README.md#transport-proof-of-concept)).
+  ([transport proof of concept](discovery/README.md#transport-proof-of-concept));
+- a read-only conversation client using that remaldi transport, with
+  sequential pagination, bounded retries and strict JSON decoding, tested
+  against fake transports. It is not connected to the CLI commands yet.
 
 Nothing in this repository can archive anything yet. Findings about the
 API go in [`docs/api-findings.md`](docs/api-findings.md). The original brief
