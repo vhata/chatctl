@@ -116,7 +116,8 @@
         const body = result.body;
         if (!object(body) || !Array.isArray(body.items) || body.items.length > LIMIT ||
             body.limit !== LIMIT || body.offset !== offset ||
-            !Number.isSafeInteger(body.total) || body.total < offset + body.items.length) {
+            !Number.isSafeInteger(body.total) || body.total < offset + body.items.length ||
+            (body.items.length === 0 && body.total !== offset)) {
           listing.stop = "invalid_page";
           break;
         }
