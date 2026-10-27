@@ -35,6 +35,7 @@ Toolchain pins: `.python-version` (3.12) and `uv.lock` for Python, `.nvmrc` (Nod
 
 - Any change to selection, filtering, CLI parsing or exit codes adds or updates a pytest case in `tests/`.
 - Any change to the pure parts of `discovery/probe.js` adds or updates a case in `discovery/probe.test.js`. Network behaviour is tested against a fake `fetch`; tests never reach chatgpt.com.
+- Changes to `discovery/listing_check.js` update `discovery/listing_check.test.js`, using fake requests and clocks. Cover redaction, GET-only execution, complete versus incomplete scans and the browser entry point without a real account.
 - Any change to `discovery/transport_poc.py` adds or updates a case in `tests/test_transport_poc.py`, which replaces the remaldi subprocess with a fake runner and runs the page script under Node with a fake `fetch` (those cases skip when `node` is missing; `scripts/test.sh` needs Node anyway).
 - Code that talks to ChatGPT is tested against recorded shapes from [api-findings.md](api-findings.md), never against a live account. Fixtures use placeholder titles and IDs.
 - Documentation-only changes need no new tests; `docket/scripts/check-links.sh` covers their links.

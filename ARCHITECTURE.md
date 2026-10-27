@@ -9,6 +9,7 @@ What the structure is now, the boundaries parallel work must respect, and the in
 - `chatctl/__main__.py`: `python -m chatctl` entry point; the `chatctl` console script is declared in `pyproject.toml`.
 - `tests/`: pytest suites for the CLI, the selection helpers and the transport proof of concept.
 - `discovery/probe.js`: a read-only probe the user pastes into the DevTools console of a logged-in chatgpt.com tab. Outside a browser it exports its pure functions instead of running, which is how `discovery/probe.test.js` tests it with `node --test`.
+- `discovery/listing_check.js`: a user-run, GET-only diagnostic for the [listing disagreement experiment](discovery/patch-listing-experiment.md). It scans both listings for local target aliases and returns redacted observations, with explicit incomplete/unknown results. Pasting defines a callable function; it does not start requests. `discovery/listing_check.test.js` tests it with fake requests, including the browser entry point.
 - `discovery/transport_poc.py`: a read-only proof of concept the user runs to page the conversation listing through `remaldi evaluate` in a logged-in chatgpt.com tab, one page per evaluation, with Python driving the loop. Standard library only; not part of the `chatctl` package. `tests/test_transport_poc.py` tests it behind a fake runner and runs its page script under Node with a fake `fetch`.
 - `docs/api-findings.md`: the recorded, dated behaviour of the undocumented ChatGPT endpoints, with evidence.
 
@@ -23,6 +24,7 @@ What the structure is now, the boundaries parallel work must respect, and the in
 - `chatctl/selection.py` reads no clock and does no I/O: the current time is passed in as a timezone-aware `now` and the cutoff as a timezone-aware datetime. Callers in `cli.py` supply `datetime.now(UTC)`.
 - `select_conversations` selects an item only when every check passes, and treats a missing or malformed field as a reason to skip, never as a default. The one deliberate exception is a missing `conversation_template_id` ([docs/DECISIONS.md](docs/DECISIONS.md)). A selected conversation's id contains only ASCII letters, digits, `-` and `_`, so it is safe in a request path. It does not modify its input.
 - Every network request in `discovery/probe.js` goes through `makeGet`, which issues GET requests only.
+- Every network request in `discovery/listing_check.js` goes through its `get` helper, which issues GET requests only. The returned report contains local aliases and field classifications, never IDs, titles, tokens or raw account responses. A completed scan is an observation under the recorded pagination contract, not a mutation verification rule.
 - Every network request the page script in `discovery/transport_poc.py` makes goes through its `get` helper, which issues GET requests only. The script returns shape data and aggregate counts, never the access token or item content.
 - The safety rules in [AGENTS.md](AGENTS.md#rules) (dry run without `--apply`, a fixed manifest before the first change, never touching project or custom GPT conversations, no account data in the repository) apply to all code; this file does not restate them.
 

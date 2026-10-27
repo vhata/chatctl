@@ -30,6 +30,10 @@ rather than here.
   only (see [`discovery/README.md`](../discovery/README.md)).
 - 2026-10-24, Network tab: the names (not values) of the request headers
   on the web UI's archive PATCH.
+- 2026-10-24, user-reported minimal-PATCH test: one throwaway conversation
+  archived through the page's wrapped `fetch`, with conflicting results
+  in the two listings and the sidebar (questions 11 and 13). No new
+  account experiment was run for the 2026-10-26 investigation.
 
 The probe reports are local and not committed.
 
@@ -158,6 +162,10 @@ HTTP 200 with `{"success": true}`.
 Evidence: Network tab 2026-10-14, restoring the throwaway conversation from
 Settings, Data controls, Archived chats.
 
+This records the UI operation only. Unarchive through a direct page
+`fetch` has not been demonstrated, nor has a reliable listing-based
+restoration check (see question 13).
+
 ### 9. How is authentication performed?
 
 Finding: `GET /api/auth/session` (cookie-authenticated) returns an
@@ -212,16 +220,31 @@ defaults; the names alone do not say which. The web app sets the rest:
 `oai-language`, `originator`, `x-openai-codex-window-type`,
 `x-openai-rate-limit-join-workspace` and `x-openai-web-frontend`. None is
 named like a CSRF or sentinel token, but the device and account headers
-could be checked. Whether the server accepts a PATCH from the page
-whose only app-set headers are `Authorization` and `Content-Type`, with
-the browser's own headers and cookies going along as always, is still
-open; no code may send a PATCH until it is answered.
+could be checked.
+
+On 2026-10-24, the user sent one archive PATCH through the page's wrapped,
+non-native `fetch`, setting only `Authorization` and `Content-Type` at the
+call site. It returned HTTP 200 with `{"success": true}`. The target
+appeared in the archived listing and Settings, Archived chats, but also
+remained in the default listing and a freshly loaded sidebar (question
+13). This demonstrates HTTP acceptance in that browser context, not a
+verified archive postcondition or a request with only two app-set headers
+on the wire: the wrapper may add headers. The actual outgoing header names
+for that direct request were not recorded here. An equivalent direct
+unarchive result was not reported.
+
+The remaining questions are which headers the intended transport actually
+sends and needs, and how to verify durable archive and restore state.
+Product mutation code remains blocked by the gates under question 13;
+the user-run experiment below starts with GETs and UI controls rather
+than another direct PATCH.
 
 Outside the browser, Cloudflare's bot challenge blocks requests before
 any application-level check could apply (see question 10).
 
 Evidence: probe 2026-10-14; Network tab 2026-10-14 and 2026-10-24
-(header names only); local access check 2026-10-14.
+(UI header names only); local access check 2026-10-14; user's minimal-PATCH
+test recorded in `TODO.md`, 2026-10-24.
 
 ### 12. What happens under rate limiting?
 
@@ -236,16 +259,67 @@ proof of concept 2026-10-24.
 
 ### 13. Does changing archive state immediately remove a conversation from the normal history endpoint?
 
-Finding: yes. The default listing excludes archived conversations
-entirely: every item it returned had `is_archived: false`, and every item
-from `GET /backend-api/conversations?is_archived=true` had
-`is_archived: true`. An archived conversation leaves the web UI's sidebar
-straight away, without a reload, and appeared in the archived listing in a
-probe run moments later. Whether it stayed out of the sidebar after a
-page reload was not recorded.
+Finding: the observations disagree; immediate removal is not a validated
+guarantee for a direct PATCH.
 
-Evidence: Network tab and second probe run 2026-10-14, with the throwaway
-conversation archived.
+- **UI archive, 2026-10-14:** every item in the default listing had
+  `is_archived: false`, and every item in the sampled archived listing had
+  `is_archived: true`. The throwaway left the sidebar immediately and
+  appeared in the archived listing in the probe run moments later.
+  Sidebar persistence after reload was not recorded. The probe reads only
+  the first archived page, so its sample cannot establish target absence.
+- **Direct wrapped-fetch archive, 2026-10-24:** the PATCH returned HTTP 200
+  with `{"success": true}`. The same throwaway appeared in the archived
+  listing with `is_archived: true` and in Settings, Archived chats, but
+  also in the default listing with `is_archived: false` and a different
+  `update_time`. It remained in the sidebar after a fresh load in a new
+  tab. The elapsed time to those checks and eventual convergence were
+  not recorded.
+
+Neither observation establishes which listing is authoritative, a
+convergence bound, the cause of disagreement, or the sufficiency of the
+direct request. Delayed indexing, caching, request context and additional
+UI effects are hypotheses, not findings. A success response alone does
+not establish that the conversation left active history. A later
+`update_time` alone does not establish which state is correct.
+
+Evidence: Network tab and second probe run 2026-10-14; user's minimal-PATCH
+test recorded in `TODO.md`, 2026-10-24. The transport proof of concept
+validated read-only pagination, not mutation consistency.
+
+The focused [user-run experiment](../discovery/patch-listing-experiment.md)
+first rechecks the original throwaway without mutation, then compares a
+second throwaway archived and unarchived through the UI. It records
+complete-list evidence and actual request header names. Results are
+pending; no account was accessed during preparation.
+
+#### Mutation gates
+
+`archive --apply` remains blocked until evidence establishes:
+
+1. A preflight rule for distinguishing active conversations from
+   already-archived conversations, including conflicting or incomplete
+   listing results. A stale `false` must not make a pre-existing archive
+   look like a change owned by a new run.
+2. A verified archive postcondition and bounded readback policy for both
+   acknowledged and unknown transport outcomes. Disagreement stays
+   unknown; do not replay a PATCH or mark success from either listing or
+   the HTTP acknowledgement alone.
+3. The intended request context and any required UI side effects, with
+   actual wire-header evidence rather than caller-header assumptions.
+
+`undo` additionally remains blocked until evidence establishes:
+
+1. Direct unarchive through the intended transport and a verified restore
+   postcondition, including conflicting listings and unknown outcomes.
+2. A manifest rule tying each restore to a confirmed change owned by that
+   run, with its pre-change state. Pre-existing archives and uncertain
+   changes must not become automatic undo candidates.
+
+The manifest must preserve unresolved outcomes for manual reconciliation;
+re-reading an unvalidated state source does not resolve them. The client,
+dry run and manifest implementation dependencies remain in
+[`TODO.md`](../TODO.md). These gates do not block read-only client work.
 
 ### 14. Is there any starred/pinned metadata worth supporting?
 

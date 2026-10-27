@@ -5,6 +5,12 @@ This kit answers the open questions in
 [`docs/api-findings.md`](../docs/api-findings.md) using your own logged-in
 browser session, before any chatctl code relies on them.
 
+For the conflicting direct-PATCH archive results, use the focused
+[listing disagreement experiment](patch-listing-experiment.md). Its
+GET-only [checker](listing_check.js) tracks two local target aliases
+through both complete listings. The general probe below samples only the
+first archived page and cannot establish a particular target's absence.
+
 ## Running the probe
 
 1. Open <https://chatgpt.com> in a desktop browser and make sure you are
@@ -94,10 +100,10 @@ token and cookies from the copy, since both include them.
 2. **Visibility.** Note whether the chat leaves the sidebar straight away,
    and whether it stays gone after a reload.
 3. **Second probe run.** While the chat is still archived, run `probe.js`
-   again. This shows whether the ordinary listing ever contains archived
-   conversations (`is_archived` true/false counts), whether the archived
-   listing picked up the throwaway chat, and the fields of each project's
-   `gizmo` object.
+   again. This records archive-flag counts and a sample of the archived
+   listing, plus the fields of each project's `gizmo` object. Counts and
+   samples cannot establish which listing contains a specific throwaway;
+   use the focused checker above for that comparison.
 4. **Unarchive.** Restore the chat from the archived chats list (currently
    Settings, then Data controls, then Archived chats) and capture the
    request.
