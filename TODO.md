@@ -53,6 +53,12 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 ### P2 Normal
 
+- [CLI] `archive-manifest-format` — **Design and implement the archive manifest: what it records, where it is written, and how a partly applied run is resumed or undone.** It is the interface between `archive` and `undo` and must land before either depends on it (ARCHITECTURE.md).
+  - Source: triage, 2026-10-15
+  - Blocked by: the user's agreement on [the proposed design](docs/specs/2026-10-26-archive-manifest-format.md) before implementation.
+  - Starting point: implement the agreed format as a pure module with private atomic storage, validation, transition helpers and tests. Archive/resume and undo command integration remain in their existing dependent tasks.
+  - Per-conversation status needs an unknown state for requests whose outcome the transport could not report (see `archive-apply`). Source: #7, 2026-10-15.
+
 - [CLI] `stats-command` — **Make `chatctl stats` summarise the listing: counts by kind (ordinary, project, custom GPT), archived state and age.** A read-only command is the first end-to-end use of the client and the safest one.
   - Source: triage, 2026-10-15
   - Depends on: `conversation-client`
@@ -89,11 +95,6 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
   - With remaldi, always pass an explicit `--target` and check `location.origin` in the page: remaldi's default target is Vivaldi's privileged UI page. Decide whether fetching the session on every page (two GETs per page in the proof of concept) is acceptable or how to reuse the token without it leaving the page. Source: #7, 2026-10-15.
 
 ### P2 Normal
-
-- [CLI] `archive-manifest-format` — **Design and implement the archive manifest: what it records, where it is written, and how a partly applied run is resumed or undone.** It is the interface between `archive` and `undo` and must land before either depends on it (ARCHITECTURE.md).
-  - Source: triage, 2026-10-15
-  - Starting point: a short design spec in `docs/specs/` agreed with the user first (location outside the repository, atomic writes, per-conversation status so an interrupted run can be resumed or undone), then a pure module with read, write and validation and its tests.
-  - Per-conversation status needs an unknown state for requests whose outcome the transport could not report (see `archive-apply`). Source: #7, 2026-10-15.
 
 ### P3 Low
 
