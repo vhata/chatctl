@@ -59,15 +59,6 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
   - Starting point: implement the agreed format as a pure module with private atomic storage, validation, transition helpers and tests. Archive/resume and undo command integration remain in their existing dependent tasks.
   - Per-conversation status needs an unknown state for requests whose outcome the transport could not report (see `archive-apply`). Source: #7, 2026-10-15.
 
-- [CLI] `stats-command` — **Make `chatctl stats` summarise the listing: counts by kind (ordinary, project, custom GPT), archived state and age.** A read-only command is the first end-to-end use of the client and the safest one.
-  - Source: triage, 2026-10-15
-  - Depends on: `conversation-client`
-
-- [CLI] `archive-dry-run` — **Make `chatctl archive` without `--apply` list the selection and its summary against the live listing.** This is the brief's first workflow, and it changes nothing.
-  - Source: triage, 2026-10-15
-  - Depends on: `conversation-client`
-  - The `--exclude` help should say that a conversation with a null title never matches a pattern. Source: review of #6, 2026-10-15.
-
 - [CLI] `archive-apply` — **Make `chatctl archive --apply` write the manifest, then archive exactly the conversations in it, recording each result.** This is the mutation the tool exists for.
   - Source: triage, 2026-10-15
   - Depends on: `archive-dry-run`, `archive-manifest-format`, `test-minimal-archive-patch`
@@ -87,14 +78,14 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 ### P1 High
 
-- [API] `conversation-client` — **Page the full conversation listing through the transport recorded in `docs/DECISIONS.md` (`remaldi evaluate` in a logged-in tab).** Every command needs the listing, and its pagination has a misleading `total` (`docs/api-findings.md`, question 2).
-  - Source: triage of `docs/api-findings.md`, 2026-10-15
-  - Starting point: `discovery/transport_poc.py` already does this read-only for aggregate counts; the client returns the listing fields selection needs instead. Offset/limit paging with `limit=100`, stopping at `offset + len(items) >= total` or an empty page; requests one at a time with bounded retries and backoff on 429 and 5xx (AGENTS.md rules). Test against fixtures shaped like the recorded responses, behind a fake transport.
-  - Decode responses rejecting duplicate JSON keys (`object_pairs_hook`): `json.loads` keeps the last duplicate, so a doubled `gizmo_id` could read as null. Source: review of #6, 2026-10-15.
-  - Percent-encode ids in request paths (`quote(id, safe="")`) even though selection restricts their characters. Source: review of #6, 2026-10-15.
-  - With remaldi, always pass an explicit `--target` and check `location.origin` in the page: remaldi's default target is Vivaldi's privileged UI page. Decide whether fetching the session on every page (two GETs per page in the proof of concept) is acceptable or how to reuse the token without it leaving the page. Source: #7, 2026-10-15.
-
 ### P2 Normal
+
+- [CLI] `stats-command` — **Make `chatctl stats` summarise the listing: counts by kind (ordinary, project, custom GPT), archived state and age.** A read-only command is the first end-to-end use of the client and the safest one.
+  - Source: triage, 2026-10-15
+
+- [CLI] `archive-dry-run` — **Make `chatctl archive` without `--apply` list the selection and its summary against the live listing.** This is the brief's first workflow, and it changes nothing.
+  - Source: triage, 2026-10-15
+  - The `--exclude` help should say that a conversation with a null title never matches a pattern. Source: review of #6, 2026-10-15.
 
 ### P3 Low
 

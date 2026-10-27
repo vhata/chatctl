@@ -2,6 +2,12 @@
 
 Non-obvious choices and their trade-offs, dated, newest section first. Read the relevant entry before changing a mechanism that looks odd. Choices made autonomously under a delegation are recorded here for the user to review; an entry is a record, not a claim that the capability is complete.
 
+## 2026-10-26
+
+| Decision | Reason and trade-off |
+| --- | --- |
+| The production listing transport fetches the session inside each page evaluation and returns the listing as raw JSON text for strict Python decoding. | Two sequential GETs per page match the proven transport and avoid a persistent token cache or credentials crossing into Python. Returning text preserves duplicate keys that JavaScript's JSON parser would silently discard, so a doubled membership field cannot become an apparently safe null. Python keeps raw items and duplicate IDs for selection's existing safety checks; malformed envelopes, exhausted retries and a page cap fail the whole listing. The default page cap is 200, configurable when constructing the client. |
+
 ## 2026-10-24
 
 | Decision | Reason and trade-off |
