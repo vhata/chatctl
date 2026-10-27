@@ -149,17 +149,28 @@ ordered `attempts` array. Each attempt contains a unique `attempt_id`,
 `acknowledged` (boolean), and nullable `verification`. Verification contains
 `checked_at` and `state` (`active`, `archived`, `conflicting`, `unavailable`)
 from the evidence-backed read contract. It never contains raw API data.
+Each attempt also has `execution`: `state` (`may_execute` or `quiescent`),
+nullable `confirmed_at`, and nullable enumerated `basis` (`not_dispatched`,
+`request_completed`, or `execution_stopped`). Quiescent requires a timestamp
+and a basis proven sufficient by the accepted transport/API contract;
+`may_execute` has neither. This records whether a delayed mutation can
+still happen, independently of whether its effect is attributable.
 
-An intent starts with `in_flight`, no finish time, no acknowledgement, and
-no verification. A received positive acknowledgement is itself checkpointed
-before verification. A verified target state plus a positive acknowledgement
-can establish `succeeded` only under the accepted API contract. A target
+An intent starts with `in_flight`, `may_execute`, no finish time, no
+acknowledgement, and no verification. A received positive acknowledgement
+is itself checkpointed before verification. A verified target state plus
+a positive acknowledgement can establish `succeeded` only under the
+accepted API contract. A target
 state observed without an acknowledgement cannot establish attribution.
 An unknown attempt can gain acknowledgement only from a late result tied
 to that exact attempt, never from a listing observation.
 
-Direction status agrees with the newest attempt, except `pending` and
-`skipped` have no attempts, and undo initially has `not_eligible`. A failed
+Direction statuses are `pending`, `skipped`, `in_flight`, `succeeded`,
+`failed`, and `unknown`, plus undo's initial `not_eligible`. Pending and
+not-eligible records have no attempts. Archive success makes undo pending.
+Otherwise status agrees with the newest attempt, except a preflight skip
+may set `skipped` with no attempts or with prior failed attempts retained;
+it cannot overwrite a success, unknown, or in-flight attempt. A failed
 direction may append another attempt only under the retry rules below.
 Terminal attempt evidence is preserved; reconciliation of unknown attempts
 adds verification/late-result evidence without deleting the prior error.
@@ -232,6 +243,12 @@ identity for every dispatch. A mismatch or unavailable identity stops the
 run. Under the global lock, inspect managed manifests for unresolved
 `in_flight`/`unknown` attempts before starting any new mutation run: a
 crashed process's browser evaluation may outlive its OS lock.
+Any attempt still marked `may_execute` holds all mutation dispatch until
+quiescence is proven and durably recorded. Once quiescent, an unknown
+outcome holds that conversation ID for that account across all manifests,
+including newly selected runs, rather than holding unrelated IDs. Loading
+an invalid/insecure published manifest fails closed; silently omitting it
+could hide such a hold. Successful and failed attempts require quiescence.
 
 For each candidate in manifest order:
 
@@ -277,8 +294,12 @@ it. Observing the old state also leaves it unknown while delayed execution
 is possible. Never resend to discover whether a request already ran.
 If the evidence cannot settle it, leave it held and direct the user to
 inspect/manage that conversation in ChatGPT; editing JSON is not recovery.
-Global dispatch remains blocked until unresolved attempts are conclusively
-settled and no late mutation can run. Version 1 supplies no force override.
+Once no late mutation can run, durable quiescence releases the global hold
+even if attribution is irretrievably lost. Keep the unknown outcome and
+its account/ID hold; other confirmed IDs can be undone and other pending
+IDs resumed. Manual UI inspection does not erase an ID hold. Version 1
+supplies no force override; unknown IDs stay ineligible for automatic undo
+and replay even after quiescence.
 
 Proposed future CLI: `chatctl archive --resume MANIFEST [--apply]`, mutually
 exclusive with selection flags. It uses the original file and order, skips
@@ -305,7 +326,7 @@ does not import or silently fork a manifest's recovery history.
 - Preserve archive results and append undo attempts. Partial undo is
   resumable by repeating `undo MANIFEST --apply`: never replay successful
   undo entries or an unknown undo attempt. Unknown undo outcomes impose
-  the same global hold and reconciliation rules as unknown archives.
+  the same execution/ID holds and reconciliation rules as unknown archives.
 - The manifest cannot detect every intervening manual unarchive/rearchive.
   Undo is an explicit request to restore confirmed run members to active,
   not a promise to restore all intervening user intent or deleted content.
@@ -328,12 +349,14 @@ before durable selection/intent, no dispatch after persistence failure,
 no unknown replay, no cross-account application, a fixed mutation set,
 preserved archive evidence, and cross-manifest serialization/unknown holds.
 Include contradictory listings, changed membership, already-active undo,
-partial item failures, bounded read retries, and a fully read-only dry run.
+partial item failures, a failed attempt followed by a preflight skip,
+quiescent unknowns releasing only the global hold, bounded read retries,
+and a fully read-only dry run.
 
 ## Agreement requested
 
 Agree or revise the private fixed storage location, strict versioned JSON
-with separate archive/undo histories, conservative global hold for unknown
+with separate archive/undo histories, execution and ID holds for unknown
 outcomes, and manifest-based resume/undo semantics. After agreement,
 implement only the pure manifest and private storage module with tests as
 `archive-manifest-format`; archive/resume and undo integration remain their
