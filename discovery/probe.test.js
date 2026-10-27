@@ -280,6 +280,44 @@ test("buildReport never contains titles, full IDs or the token", async () => {
   assert.ok(calls.every((call) => call.init.method === "GET" && call.init.body === undefined));
 });
 
+test("buildReport redacts rejected projects requests", async (t) => {
+  const secrets = [
+    "synthetic-private-project-title",
+    "synthetic-secret-access-token",
+    "conversation-0000-full-identifier",
+    "https://chatgpt.test/synthetic-private-path",
+  ];
+  const message = secrets.join(" ");
+  const cases = [
+    { name: "TypeError", rejection: new TypeError(message), expected: "TypeError" },
+    { name: "string", rejection: message, expected: "Error" },
+    { name: "null", rejection: null, expected: "Error" },
+    { name: "undefined", rejection: undefined, expected: "Error" },
+  ];
+  for (const { name, rejection, expected } of cases) {
+    await t.test(name, async () => {
+      const { fetchImpl, calls } = fakeFetch((path) => {
+        if (path === probe.ENDPOINTS.session) {
+          return { body: { accessToken: secrets[1] } };
+        }
+        if (path === probe.ENDPOINTS.projects) throw rejection;
+        assert.ok(path.startsWith(probe.ENDPOINTS.conversations));
+        return { body: { items: [] } };
+      });
+      const report = await probe.buildReport(fetchImpl, NOW, { sleep: noSleep });
+      const text = JSON.stringify(report);
+      for (const secret of secrets) assert.ok(!text.includes(secret));
+      assert.deepEqual(report.probes.projects, { error: expected });
+      for (const name of ["conversations", "archived"]) {
+        assert.equal(report.probes[name].summary.item_count, 0);
+        assert.equal(report.probes[name].stop_reason, "empty_page");
+      }
+      assert.equal(calls.length, 4);
+      assert.ok(calls.every((call) => call.init.method === "GET" && call.init.body === undefined));
+    });
+  }
+});
+
 test("buildReport stops after the session call when there is no token", async () => {
   const { fetchImpl, calls } = fakeFetch(() => ({ body: {} }));
   const report = await probe.buildReport(fetchImpl, NOW, { sleep: noSleep });

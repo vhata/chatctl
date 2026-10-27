@@ -12,11 +12,6 @@ Only work promoted from whole-codebase reviews belongs here. Every entry is read
 
 ## Unprioritized
 
-- [DISCOVERY] `redact-probe-errors` — **Keep exception messages out of probe reports.** The projects error path currently bypasses the report's privacy boundary.
-  - Source: [full review](2026-10-24-0247-full.md), 2026-10-24
-  - Findings: `probe-exception-text-disclosure`
-  - Starting point: `discovery/probe.js:359` (`runProbe`); use the error-type-only treatment already in `walkList` and add a fake-fetch privacy regression for a rejected projects request. The reproduction is synthetic, with no observed native-browser credential disclosure.
-
 - [CLI] `handle-regex-overflow` — **Report oversized exclusion regex repetitions as usage errors.** An invalid repetition currently escapes argument validation as an uncaught `OverflowError`.
   - Source: [full review](2026-10-24-0247-full.md), 2026-10-24
   - Findings: `regex-repetition-overflow`
