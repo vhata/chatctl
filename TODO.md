@@ -8,12 +8,6 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 ### P1 High
 
-- [API] `patch-listing-disagreement` — **Find out why a conversation archived by a direct `PATCH` from the page appears in both listings, archived in one and not in the other, and stays in the sidebar.** chatctl's selection, verification and undo read the listings, so they cannot rely on either one until it is known which reflects the server's state and whether the other catches up.
-  - Source: user's minimal-PATCH test for `capture-archive-patch-headers`, 2026-10-24
-  - Related: `archive-apply`, `undo-command`
-  - Evidence, one throwaway conversation, 2026-10-24: a `PATCH /backend-api/conversation/<id>` with `{"is_archived": true}`, made from the tab's (wrapped, non-native) `fetch` with only `Authorization` and `Content-Type` set by the caller, returned 200 `{"success": true}`. Afterwards the conversation was in `?is_archived=true` with `is_archived: true` and in Settings, Archived chats, but also in the default listing with `is_archived: false` and a different `update_time`, and in the sidebar after a fresh load in a new tab. When archived from the web UI on 2026-10-14 it left the default listing (`docs/api-findings.md`, question 13).
-  - Starting point: repeat the read-only two-listing check later to see whether the default listing catches up; compare against a second throwaway archived from the UI with the Network tab recording every request it makes; record the request headers the wrapped `fetch` actually sent.
-
 ### P2 Normal
 
 ### P3 Low
@@ -45,11 +39,19 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 ### P1 High
 
-- [API] `test-minimal-archive-patch` — **Find out whether an archive `PATCH` made from the page with only `Authorization` and `Content-Type` is accepted, and if not, which of the web app's own headers it needs.** The UI sends device and account headers whose values chatctl would have to reproduce (`docs/api-findings.md`, question 11), and no code may send a `PATCH` until this is known.
+- [API] `patch-listing-disagreement` — **Find out why a conversation archived by a direct `PATCH` from the page appears in both listings, archived in one and not in the other, and stays in the sidebar.** Establish preflight and verification rules before either listing can drive archive or undo.
+  - Source: user's minimal-PATCH test for `capture-archive-patch-headers`, 2026-10-24
+  - Related: `archive-apply`, `undo-command`
+  - Blocked by: the user running the [focused experiment](discovery/patch-listing-experiment.md) on the original throwaway and a UI control; agents must not access the account. Preparation and documentation reconciliation do not resolve the disagreement.
+  - Evidence: the dated UI and wrapped-fetch observations, their limits and the archive/undo acceptance gates are recorded in [api-findings.md, question 13](docs/api-findings.md#13-does-changing-archive-state-immediately-remove-a-conversation-from-the-normal-history-endpoint).
+  - Starting point: [listing_check.js](discovery/listing_check.js) scans both listings using local aliases. Recheck without mutation first, then compare UI archive/unarchive and actual outgoing header names. Preserve unknown outcomes; do not replay direct PATCHes to force agreement.
+
+- [API] `test-minimal-archive-patch` — **Establish the actual request context needed for direct archive and unarchive through the intended transport.** One wrapped-fetch archive returned HTTP 200, but caller-only `Authorization` and `Content-Type` do not establish wire-header minimality or durable state (`docs/api-findings.md`, question 11).
   - Source: todo/choose-browser-transport (#7), 2026-10-24
   - Remaining from: `capture-archive-patch-headers`
-  - Blocked by: the user archiving and then unarchiving a throwaway conversation from the tab, once with only those two headers and, if that fails, adding the app's headers back until it succeeds.
-  - Starting point: a one-off snippet for the console or `remaldi evaluate` that sends `PATCH /backend-api/conversation/<id>` with `{"is_archived": true}` for an ID the user pastes in, then the same with `false`; record the outcome under question 11.
+  - Depends on: `patch-listing-disagreement`
+  - Blocked by: user-captured actual wire-header evidence for the direct request and a verified direct unarchive result. Neither has been recorded; agents must not run these against the account.
+  - Starting point: use the focused experiment's UI control and existing direct-request capture, if available, to choose a subsequent one-variable test. Do not guess additional headers or equate HTTP success with a verified archive.
 
 ### P2 Normal
 
@@ -64,12 +66,13 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 - [CLI] `archive-apply` — **Make `chatctl archive --apply` write the manifest, then archive exactly the conversations in it, recording each result.** This is the mutation the tool exists for.
   - Source: triage, 2026-10-15
-  - Depends on: `archive-dry-run`, `archive-manifest-format`, `test-minimal-archive-patch`
-  - A transport timeout can leave it unknown whether a `PATCH` was applied (remaldi reports `unknown_outcome` and never replays). Re-read the conversation's state rather than resending, and record such conversations as unknown in the manifest. Source: #7, 2026-10-15.
+  - Depends on: `archive-dry-run`, `archive-manifest-format`, `test-minimal-archive-patch`, `patch-listing-disagreement`
+  - Acceptance: the preflight and archive readback gates in [api-findings.md](docs/api-findings.md#mutation-gates) need evidence before implementation. A transport timeout, conflicting listings or incomplete readback stays unknown in the manifest; HTTP success alone cannot close it, and a PATCH must not be replayed. Source: #7 and user's direct-PATCH test, 2026-10-24.
 
 - [CLI] `undo-command` — **Make `chatctl undo MANIFEST` unarchive exactly the conversations a manifest records as archived.** Undo is the other half of the safety principle.
   - Source: triage, 2026-10-15
-  - Depends on: `archive-apply`
+  - Depends on: `archive-apply`, `archive-manifest-format`, `test-minimal-archive-patch`, `patch-listing-disagreement`
+  - Acceptance: the restore and ownership gates in [api-findings.md](docs/api-findings.md#mutation-gates) require a verified direct unarchive and known pre-change state. Restore only changes confirmed as owned by this manifest; pre-existing archives and uncertain outcomes are not automatic undo candidates.
 
 ### P3 Low
 
