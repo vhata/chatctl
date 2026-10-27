@@ -151,6 +151,41 @@ test("repeated pages and within-page duplicates halt, preserving contradictory t
   redacted(result);
 });
 
+test("empty pages promising more results cannot establish absence", async () => {
+  const first = fixture(() => page(0, [], 101));
+  const firstResult = await first.run();
+  assert.equal(firstResult.stop, "invalid_page");
+  assert.equal(firstResult.listings.default.complete, false);
+  assert.equal(firstResult.listings.default.targets.A.presence, "unknown");
+  assert.equal(first.calls.length, 2);
+
+  const later = fixture(({ offset }) => offset ? page(offset, [], offset + 1) : page(0, [row(TARGET)], 2));
+  const laterResult = await later.run({ targets: { A: TARGET, B: "unseen-control" } });
+  assert.equal(laterResult.stop, "invalid_page");
+  assert.equal(laterResult.listings.default.complete, false);
+  assert.equal(laterResult.listings.default.targets.A.presence, "present");
+  assert.equal(laterResult.listings.default.targets.A.observations.length, 1);
+  assert.equal(laterResult.listings.default.targets.B.presence, "unknown");
+  assert.equal(laterResult.listings.archived.stop, "not_started");
+  assert.equal(later.calls.length, 3);
+  redacted(firstResult);
+  redacted(laterResult);
+});
+
+test("empty page with total equal to offset cleanly completes listing", async () => {
+  const f = fixture(({ offset }) => offset ? page(offset, []) : page(0, [row("other")], 2));
+  const result = await f.run();
+  assert.equal(result.stop, "complete");
+  for (const listing of Object.values(result.listings)) {
+    assert.equal(listing.complete, true);
+    assert.equal(listing.pages, 2);
+    assert.equal(listing.targets.A.presence, "absent");
+  }
+  const zero = fixture(() => page(0, []));
+  assert.equal((await zero.run()).stop, "complete");
+  redacted(result);
+});
+
 test("200-page cap bounds listings and cannot imply absence", async () => {
   const f = fixture(({ offset }) => page(offset, [row(`row-${offset}`)], offset + 2));
   const result = await f.run();
