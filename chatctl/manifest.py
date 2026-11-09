@@ -538,6 +538,8 @@ def validate_transition(old: Document, new: Document, expected_revision: int) ->
                 if p["verification"] is not None and q["verification"] is None:
                     raise ManifestError("verification evidence lost")
     _require(changed_records <= 1, "one direction per checkpoint required")
+    if old["undo_started_at"] is None and new["undo_started_at"] is not None:
+        _require(changed_records == 0, "undo seal needs its own checkpoint")
 
 
 def _edit(document: Document, expected_revision: int, now: str) -> Document:

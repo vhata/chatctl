@@ -55,20 +55,14 @@ Ordinary follow-ups and bugs found during other work live here. Whole-codebase r
 
 ### P2 Normal
 
-- [CLI] `archive-manifest-format` — **Design and implement the archive manifest: what it records, where it is written, and how a partly applied run is resumed or undone.** It is the interface between `archive` and `undo` and must land before either depends on it (ARCHITECTURE.md).
-  - Source: triage, 2026-10-15
-  - Blocked by: the user's agreement on [the proposed design](docs/specs/2026-10-26-archive-manifest-format.md) before implementation.
-  - Starting point: implement the agreed format as a pure module with private atomic storage, validation, transition helpers and tests. Archive/resume and undo command integration remain in their existing dependent tasks.
-  - Per-conversation status needs an unknown state for requests whose outcome the transport could not report (see `archive-apply`). Source: #7, 2026-10-15.
-
 - [CLI] `archive-apply` — **Make `chatctl archive --apply` write the manifest, then archive exactly the conversations in it, recording each result.** This is the mutation the tool exists for.
   - Source: triage, 2026-10-15
-  - Depends on: `archive-manifest-format`, `test-minimal-archive-patch`, `patch-listing-disagreement`
+  - Depends on: `test-minimal-archive-patch`, `patch-listing-disagreement`
   - Acceptance: the preflight and archive readback gates in [api-findings.md](docs/api-findings.md#mutation-gates) need evidence before implementation. A transport timeout, conflicting listings or incomplete readback stays unknown in the manifest; HTTP success alone cannot close it, and a PATCH must not be replayed. Source: #7 and user's direct-PATCH test, 2026-10-24.
 
 - [CLI] `undo-command` — **Make `chatctl undo MANIFEST` unarchive exactly the conversations a manifest records as archived.** Undo is the other half of the safety principle.
   - Source: triage, 2026-10-15
-  - Depends on: `archive-apply`, `archive-manifest-format`, `test-minimal-archive-patch`, `patch-listing-disagreement`
+  - Depends on: `archive-apply`, `test-minimal-archive-patch`, `patch-listing-disagreement`
   - Acceptance: the restore and ownership gates in [api-findings.md](docs/api-findings.md#mutation-gates) require a verified direct unarchive and known pre-change state. Restore only changes confirmed as owned by this manifest; pre-existing archives and uncertain outcomes are not automatic undo candidates.
 
 ### P3 Low

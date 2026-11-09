@@ -318,3 +318,11 @@ def test_document_rejects_nonfinite_values_anywhere():
     text = json.dumps(document()).replace('"revision": 0', '"revision": NaN')
     with pytest.raises(m.ManifestError):
         m.loads(text)
+
+
+def test_undo_seal_cannot_share_an_archive_intent_checkpoint():
+    d = document()
+    forged = begin(d)
+    forged["undo_started_at"] = NOW
+    with pytest.raises(m.ManifestError, match="own checkpoint"):
+        m.validate_transition(d, forged, 0)
