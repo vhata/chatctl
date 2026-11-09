@@ -2,6 +2,15 @@
 
 Non-obvious choices and their trade-offs, dated, newest section first. Read the relevant entry before changing a mechanism that looks odd. Choices made autonomously under a delegation are recorded here for the user to review; an entry is a record, not a claim that the capability is complete.
 
+## 2026-11-09
+
+The user approved the [version-1 manifest design](specs/2026-10-26-archive-manifest-format.md).
+Implement the offline journal and private atomic POSIX store independently
+of live mutation support. Keep archive and undo histories separate, preserve
+unknown outcomes, and require proven quiescence before releasing execution
+holds. No account access or mutation semantics are authorized by this
+decision; archive apply and undo remain subject to the recorded API gates.
+
 ## 2026-10-26
 
 | Decision | Reason and trade-off |
