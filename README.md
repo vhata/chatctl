@@ -15,6 +15,8 @@ Early. So far there is:
   archived conversation listings by kind, reported archive state and age;
 - `chatctl archive --target TAB --older-than 90d`, a read-only preview of
   the conversations selected for archiving and why other rows are skipped;
+- an offline manifest module with private atomic storage and recovery
+  records for future archive/undo commands ([module documentation](docs/manifest-module.md));
 - a CLI skeleton for `chatctl undo` that parses and validates options,
   then exits with "not implemented yet";
 - a read-only [discovery probe](discovery/README.md) for working out how

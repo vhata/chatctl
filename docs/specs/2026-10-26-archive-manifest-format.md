@@ -1,6 +1,8 @@
 # Archive manifest format
 
-Status: proposed; implementation awaits the user's agreement.
+Status: approved by the user on 2026-11-09; the offline manifest and
+private storage modules are implemented. Live command integration remains
+blocked by the evidence requirements below.
 
 ## Problem and scope
 
@@ -11,10 +13,11 @@ commit atomically with a remote request: some outcomes will remain unknown.
 The design preserves that uncertainty rather than claiming exactly-once
 execution or replaying a request whose result was lost.
 
-This proposes version 1 of the manifest and its storage/transition API for
-`archive-manifest-format` in [TODO.md](../../TODO.md). It does not implement
-the module, transport, archive, resume, or undo commands. The existing
-[CLI](../../chatctl/cli.py) remains unimplemented. The
+This defines version 1 of the manifest and its storage/transition API.
+[Module usage](../manifest-module.md) documents the implemented offline
+interface. Archive apply, resume and undo command integration remain in
+[TODO.md](../../TODO.md); the existing [CLI](../../chatctl/cli.py) still
+supports statistics and archive previews only. The
 [safety rules](../../AGENTS.md#rules) and
 [selection predicate](../../chatctl/selection.py) remain authoritative.
 
@@ -51,7 +54,7 @@ is assumed by this spec.
 
 ## Private storage
 
-Proposed default: `~/.local/state/chatctl/manifests/`, independent of the
+Fixed default: `~/.local/state/chatctl/manifests/`, independent of the
 working directory, with no configurable output path in version 1. Files
 are named `archive-run-<UTC timestamp>-<random UUID>.json`; names contain no
 conversation title, conversation ID, or account identifier. Print the
@@ -332,7 +335,7 @@ does not import or silently fork a manifest's recovery history.
   not a promise to restore all intervening user intent or deleted content.
   It cannot guarantee a state snapshot against concurrent web UI changes.
 
-## Acceptance checks for later implementation
+## Acceptance checks
 
 Use synthetic IDs and fake filesystem/transport outcomes only. The module
 work must test strict validation and immutable-field transitions, both
@@ -353,11 +356,11 @@ partial item failures, a failed attempt followed by a preflight skip,
 quiescent unknowns releasing only the global hold, bounded read retries,
 and a fully read-only dry run.
 
-## Agreement requested
+## Approved scope
 
-Agree or revise the private fixed storage location, strict versioned JSON
+The user approved the private fixed storage location, strict versioned JSON
 with separate archive/undo histories, execution and ID holds for unknown
-outcomes, and manifest-based resume/undo semantics. After agreement,
-implement only the pure manifest and private storage module with tests as
-`archive-manifest-format`; archive/resume and undo integration remain their
-existing dependent tasks, subject to the API evidence blockers above.
+outcomes, and manifest-based resume/undo semantics on 2026-11-09. The
+implementation covers the pure manifest and private storage modules with
+synthetic tests. Archive/resume and undo integration remain their existing
+dependent tasks, subject to the API evidence blockers above.
